@@ -261,4 +261,4 @@ private:
     }
 };
 
-} // namespace dsp
+} // namespace ShortwavDSP
