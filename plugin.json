@@ -6,5 +6,15 @@
   "brand": "Shortwav Labs",
   "author": "Stephane Pericat",
   "authorEmail": "contact@shortwavlabs.com",
-  "modules": []
+  "modules": [
+    {
+      "slug": "RandomLfo",
+      "name": "Random LFO",
+      "description": "A random lfo generator",
+      "tags": [
+        "LFO",
+        "Random"
+      ]
+    }
+  ]
 }
