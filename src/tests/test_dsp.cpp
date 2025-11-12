@@ -15,6 +15,7 @@
 #include <limits>
 #include "../dsp/waveshaper.h"
 #include "../dsp/random-lfo.h"
+#include "../dsp/drift.h"
 
 namespace {
 
@@ -417,6 +418,168 @@ void test_randomlfo_boundary_conditions(TestContext& ctx) {
     T_ASSERT(ctx, std::isfinite(v1));
 }
 
+//------------------------------------------------------------------------------
+// DriftGenerator tests
+//------------------------------------------------------------------------------
+
+void test_drift_generator_basic_finiteness(TestContext& ctx)
+{
+    using ShortwavDSP::DriftGenerator;
+
+    DriftGenerator drift;
+    drift.setSampleRate(44100.0f);
+    drift.setRateHz(0.2f);
+    drift.setDepth(1.0f);
+    drift.seed(123456u);
+    drift.reset(0.0f);
+
+    // Large number of samples: must remain finite and bounded reasonably.
+    float minV = std::numeric_limits<float>::max();
+    float maxV = -std::numeric_limits<float>::max();
+
+    for (int i = 0; i < 44100 * 10; ++i) // 10 seconds
+    {
+        float v = drift.next();
+        T_ASSERT(ctx, std::isfinite(v));
+
+        if (v < minV) minV = v;
+        if (v > maxV) maxV = v;
+    }
+
+    // Extremely loose bounds: drift should not explode to huge values.
+    T_ASSERT(ctx, minV > -5.0f);
+    T_ASSERT(ctx, maxV <  5.0f);
+}
+
+void test_drift_generator_continuity(TestContext& ctx)
+{
+    using ShortwavDSP::DriftGenerator;
+
+    DriftGenerator drift;
+    drift.setSampleRate(48000.0f);
+    drift.setRateHz(0.5f);
+    drift.setDepth(1.0f);
+    drift.seed(42u);
+    drift.reset(0.0f);
+
+    float prev = drift.next();
+    bool hasReasonableContinuity = true;
+
+    for (int i = 0; i < 48000 * 5; ++i)
+    {
+        float v = drift.next();
+        float step = std::fabs(v - prev);
+
+        // Steps should be tiny for slow drift; allow a loose but finite bound.
+        if (step > 0.1f)
+        {
+            hasReasonableContinuity = false;
+            break;
+        }
+        prev = v;
+    }
+
+    T_ASSERT(ctx, hasReasonableContinuity);
+}
+
+void test_drift_generator_determinism(TestContext& ctx)
+{
+    using ShortwavDSP::DriftGenerator;
+
+    DriftGenerator a;
+    DriftGenerator b;
+
+    a.setSampleRate(44100.0f);
+    b.setSampleRate(44100.0f);
+
+    a.setRateHz(0.3f);
+    b.setRateHz(0.3f);
+
+    a.setDepth(0.75f);
+    b.setDepth(0.75f);
+
+    a.seed(987654u);
+    b.seed(987654u);
+
+    a.reset(0.1f);
+    b.reset(0.1f);
+
+    for (int i = 0; i < 44100 * 4; ++i)
+    {
+        float va = a.next();
+        float vb = b.next();
+        T_ASSERT_NEAR(ctx, va, vb, 1e-6f);
+    }
+}
+
+void test_drift_generator_parameter_effects(TestContext& ctx)
+{
+    using ShortwavDSP::DriftGenerator;
+
+    DriftGenerator slow;
+    DriftGenerator fast;
+
+    slow.setSampleRate(44100.0f);
+    fast.setSampleRate(44100.0f);
+
+    slow.seed(1u);
+    fast.seed(1u);
+
+    slow.reset(0.0f);
+    fast.reset(0.0f);
+
+    // Same depth, different rates: fast should exhibit more movement.
+    slow.setDepth(1.0f);
+    fast.setDepth(1.0f);
+
+    slow.setRateHz(0.05f); // very slow
+    fast.setRateHz(1.0f);  // faster
+
+    float prevSlow = slow.next();
+    float prevFast = fast.next();
+    float accSlow = 0.0f;
+    float accFast = 0.0f;
+    const int N = 44100 * 6;
+
+    for (int i = 1; i < N; ++i)
+    {
+        float vs = slow.next();
+        float vf = fast.next();
+        accSlow += std::fabs(vs - prevSlow);
+        accFast += std::fabs(vf - prevFast);
+        prevSlow = vs;
+        prevFast = vf;
+    }
+
+    const float avgSlow = accSlow / (N - 1);
+    const float avgFast = accFast / (N - 1);
+
+    // Qualitative: faster rate should yield more average movement.
+    T_ASSERT(ctx, avgFast > avgSlow * 1.2f);
+}
+
+void test_drift_generator_boundary_conditions(TestContext& ctx)
+{
+    using ShortwavDSP::DriftGenerator;
+
+    DriftGenerator drift;
+
+    drift.setSampleRate(192000.0f); // high sample rate
+    drift.setDepth(2.0f);
+    drift.setRateHz(0.0001f); // extremely slow, near minimum
+    drift.seed(321u);
+    drift.reset(0.0f);
+
+    for (int i = 0; i < 192000; ++i)
+    {
+        float v = drift.next();
+        // Must remain finite and not blow up even with extreme settings.
+        T_ASSERT(ctx, std::isfinite(v));
+        T_ASSERT(ctx, v > -10.0f);
+        T_ASSERT(ctx, v <  10.0f);
+    }
+}
+
 // Entry point to run all tests when this TU is built as a standalone test binary.
 // In normal plugin builds this file is not included.
 } // namespace
@@ -444,6 +607,13 @@ int main() {
     ::test_randomlfo_bipolar_unipolar_and_depth(ctx);
     ::test_randomlfo_smooth_parameter_effect(ctx);
     ::test_randomlfo_boundary_conditions(ctx);
+
+    // DriftGenerator
+    ::test_drift_generator_basic_finiteness(ctx);
+    ::test_drift_generator_continuity(ctx);
+    ::test_drift_generator_determinism(ctx);
+    ::test_drift_generator_parameter_effects(ctx);
+    ::test_drift_generator_boundary_conditions(ctx);
 
     ctx.summary();
     return (ctx.failed == 0) ? 0 : 1;
