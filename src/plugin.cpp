@@ -1,16 +1,16 @@
 #include "plugin.hpp"
-
+#include "RandomLfo.hpp"
+#include "Waveshaper.hpp"
 
 Plugin *pluginInstance;
 
+extern Model *modelRandomlfo;
+extern Model *modelWaveshaper;
 
 void init(Plugin *p) {
 	pluginInstance = p;
+
+	// Register modules
 	p->addModel(modelRandomlfo);
-
-	// Add modules here
-	// p->addModel(modelMyModule);
-
-	// Any other plugin initialization may go here.
-	// As an alternative, consider lazy-loading assets and lookup tables when your module is created to reduce startup times of Rack.
+	p->addModel(modelWaveshaper);
 }

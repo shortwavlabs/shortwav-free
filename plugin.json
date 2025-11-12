@@ -15,6 +15,17 @@
         "LFO",
         "Random"
       ]
+    },
+    {
+      "slug": "Waveshaper",
+      "name": "Waveshaper",
+      "description": "Chebyshev-based harmonic waveshaper for modular signals",
+      "tags": [
+        "Waveshaper",
+        "Distortion",
+        "Utility"
+      ]
     }
   ]
 }
+
