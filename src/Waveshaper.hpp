@@ -81,7 +81,7 @@ struct WaveshaperWidget : ModuleWidget
   WaveshaperWidget(Waveshaper* module)
   {
     setModule(module);
-    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/3HP.svg")));
+    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/9HP_BLANK.svg")));
 
     // Screws
     addChild(createWidget<ScrewSilver>(Vec(0, 0)));
@@ -97,22 +97,21 @@ struct WaveshaperWidget : ModuleWidget
     y += 40.f;
     addParam(createParam<RoundLargeBlackKnob>(Vec(5, y), module, Waveshaper::ORDER_PARAM));
     y += 40.f;
-    addParam(createParam<CKSS>(Vec(15, y), module, Waveshaper::SOFTCLIP_PARAM));
+    addParam(createParam<CKSS>(Vec(15, y + 20.f), module, Waveshaper::SOFTCLIP_PARAM));
     y += 40.f;
 
+    float y2 = 20.f;
     // Harmonic knobs (small, stacked)
-    addParam(createParam<RoundLargeBlackKnob>(Vec(5, y), module, Waveshaper::HARM1_PARAM));
-    y += 35.f;
-    addParam(createParam<RoundLargeBlackKnob>(Vec(5, y), module, Waveshaper::HARM2_PARAM));
-    y += 35.f;
-    addParam(createParam<RoundLargeBlackKnob>(Vec(5, y), module, Waveshaper::HARM3_PARAM));
-    y += 35.f;
-    addParam(createParam<RoundLargeBlackKnob>(Vec(5, y), module, Waveshaper::HARM4_PARAM));
-    y += 35.f;
+    addParam(createParam<RoundLargeBlackKnob>(Vec(50, y2), module, Waveshaper::HARM1_PARAM));
+    y2 += 40.f;
+    addParam(createParam<RoundLargeBlackKnob>(Vec(50, y2), module, Waveshaper::HARM2_PARAM));
+    y2 += 40.f;
+    addParam(createParam<RoundLargeBlackKnob>(Vec(50, y2), module, Waveshaper::HARM3_PARAM));
+    y2 += 40.f;
+    addParam(createParam<RoundLargeBlackKnob>(Vec(50, y2), module, Waveshaper::HARM4_PARAM));
 
     // I/O jacks
-    addInput(createInput<PJ301MPort>(Vec(5, y), module, Waveshaper::SIGNAL_INPUT));
-    y += 35.f;
-    addOutput(createOutput<PJ301MPort>(Vec(5, y), module, Waveshaper::SIGNAL_OUTPUT));
+    addInput(createInput<PJ301MPort>(Vec(10, 320), module, Waveshaper::SIGNAL_INPUT));
+    addOutput(createOutput<PJ301MPort>(Vec(55, 320), module, Waveshaper::SIGNAL_OUTPUT));
   }
 };
