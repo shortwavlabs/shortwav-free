@@ -57,7 +57,7 @@ struct Waveshaper : Module
     configParam(OUTPUT_GAIN_PARAM, 0.f, 2.f, 1.f, "Output gain", "", 0.f, 1.f);
 
     // 0 = bypass via order 0, up to MaxOrder
-    configParam(ORDER_PARAM, 0.f, (float)MaxOrder, 4.f, "Chebyshev order");
+    configParam(ORDER_PARAM, 0.f, 4.f, 4.f, "Chebyshev order");
 
     // 0 = hard clamp, 1 = soft-clip
     configParam(SOFTCLIP_PARAM, 0.f, 1.f, 1.f, "Soft clip");
@@ -94,8 +94,8 @@ struct WaveshaperWidget : ModuleWidget
     addParam(createParam<RoundLargeBlackKnob>(Vec(5, y), module, Waveshaper::INPUT_GAIN_PARAM));
     y += 40.f;
     addParam(createParam<RoundLargeBlackKnob>(Vec(5, y), module, Waveshaper::OUTPUT_GAIN_PARAM));
-    y += 40.f;
-    addParam(createParam<RoundLargeBlackKnob>(Vec(5, y), module, Waveshaper::ORDER_PARAM));
+    y += 45.f;
+    addParam(createParam<RoundBlackSnapKnob>(Vec(10, y), module, Waveshaper::ORDER_PARAM));
     y += 40.f;
     addParam(createParam<CKSS>(Vec(15, y + 20.f), module, Waveshaper::SOFTCLIP_PARAM));
     y += 40.f;
