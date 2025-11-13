@@ -63,4 +63,4 @@ void RandomLfo::process(const ProcessArgs &args)
   outputs[LFO_OUTPUT].setVoltage(outV);
 }
 
-Model *modelRandomlfo = createModel<RandomLfo, RandomLfoWidget>("RandomLfo");
+Model *modelRandomLfo = createModel<RandomLfo, RandomLfoWidget>("RandomLfo");
