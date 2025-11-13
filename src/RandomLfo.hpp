@@ -8,10 +8,10 @@ struct RandomLfo : Module
 {
   enum ParamIds
   {
-    RATE_PARAM,        // Hz
-    DEPTH_PARAM,       // 0..1
-    SMOOTH_PARAM,      // 0..1
-    BIPOLAR_PARAM,     // 0 = unipolar, 1 = bipolar
+    RATE_PARAM,    // Hz
+    DEPTH_PARAM,   // 0..1
+    SMOOTH_PARAM,  // 0..1
+    BIPOLAR_PARAM, // 0 = unipolar, 1 = bipolar
     NUM_PARAMS
   };
 

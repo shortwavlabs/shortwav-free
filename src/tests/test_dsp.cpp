@@ -17,51 +17,63 @@
 #include "../dsp/random-lfo.h"
 #include "../dsp/drift.h"
 
-namespace {
+namespace
+{
 
-constexpr float kEpsilon = 1e-5f;
-constexpr float kTightEpsilon = 1e-6f;
+  constexpr float kEpsilon = 1e-5f;
+  constexpr float kTightEpsilon = 1e-6f;
 
-// Simple assertion helpers (no external framework required).
-struct TestContext {
+  // Simple assertion helpers (no external framework required).
+  struct TestContext
+  {
     int passed = 0;
     int failed = 0;
 
-    void assertTrue(bool cond, const char* name, const char* file, int line) {
-        if (cond) {
-            ++passed;
-        } else {
-            ++failed;
-            std::printf("[FAIL] %s (%s:%d)\n", name, file, line);
-        }
+    void assertTrue(bool cond, const char *name, const char *file, int line)
+    {
+      if (cond)
+      {
+        ++passed;
+      }
+      else
+      {
+        ++failed;
+        std::printf("[FAIL] %s (%s:%d)\n", name, file, line);
+      }
     }
 
     void assertNear(float actual, float expected, float tol,
-                    const char* name, const char* file, int line) {
-        const float diff = std::fabs(actual - expected);
-        if (diff <= tol || (std::isnan(expected) && std::isnan(actual))) {
-            ++passed;
-        } else {
-            ++failed;
-            std::printf("[FAIL] %s: expected=%g actual=%g tol=%g (%s:%d)\n",
-                        name, (double) expected, (double) actual, (double) tol, file, line);
-        }
+                    const char *name, const char *file, int line)
+    {
+      const float diff = std::fabs(actual - expected);
+      if (diff <= tol || (std::isnan(expected) && std::isnan(actual)))
+      {
+        ++passed;
+      }
+      else
+      {
+        ++failed;
+        std::printf("[FAIL] %s: expected=%g actual=%g tol=%g (%s:%d)\n",
+                    name, (double)expected, (double)actual, (double)tol, file, line);
+      }
     }
 
-    void summary() const {
-        std::printf("[TEST SUMMARY] passed=%d failed=%d\n", passed, failed);
+    void summary() const
+    {
+      std::printf("[TEST SUMMARY] passed=%d failed=%d\n", passed, failed);
     }
-};
+  };
 
 #define T_ASSERT(ctx, cond) (ctx).assertTrue((cond), #cond, __FILE__, __LINE__)
 #define T_ASSERT_NEAR(ctx, actual, expected, tol) \
-    (ctx).assertNear((actual), (expected), (tol), #actual " ~= " #expected, __FILE__, __LINE__)
+  (ctx).assertNear((actual), (expected), (tol), #actual " ~= " #expected, __FILE__, __LINE__)
 
-//------------------------------------------------------------------------------
-// ChebyshevWaveshaper tests
-//------------------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+  // ChebyshevWaveshaper tests
+  //------------------------------------------------------------------------------
 
-void test_waveshaper_basic_linear(TestContext& ctx) {
+  void test_waveshaper_basic_linear(TestContext &ctx)
+  {
     using ShortwavDSP::ChebyshevWaveshaper;
 
     ChebyshevWaveshaper<8> ws;
@@ -71,21 +83,24 @@ void test_waveshaper_basic_linear(TestContext& ctx) {
     ws.setUseSoftClipForInput(false);
 
     // For linear config with T1(x) = x, processSample should equal input in [-1,1].
-    const float inputs[] = { -1.0f, -0.5f, 0.0f, 0.5f, 1.0f };
-    for (float in : inputs) {
-        float out = ws.processSample(in);
-        T_ASSERT_NEAR(ctx, out, in, kTightEpsilon);
+    const float inputs[] = {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f};
+    for (float in : inputs)
+    {
+      float out = ws.processSample(in);
+      T_ASSERT_NEAR(ctx, out, in, kTightEpsilon);
     }
 
     // When order==0, should act as bypass for all inputs.
     ws.setOrder(0);
-    for (float in : inputs) {
-        float out = ws.processSample(in);
-        T_ASSERT_NEAR(ctx, out, in, kTightEpsilon);
+    for (float in : inputs)
+    {
+      float out = ws.processSample(in);
+      T_ASSERT_NEAR(ctx, out, in, kTightEpsilon);
     }
-}
+  }
 
-void test_waveshaper_input_clamp_and_softclip(TestContext& ctx) {
+  void test_waveshaper_input_clamp_and_softclip(TestContext &ctx)
+  {
     using ShortwavDSP::ChebyshevWaveshaper;
 
     ChebyshevWaveshaper<4> ws;
@@ -95,37 +110,38 @@ void test_waveshaper_input_clamp_and_softclip(TestContext& ctx) {
     // Hard clamp mode: inputs beyond [-1,1] are clamped before shaping.
     ws.setUseSoftClipForInput(false);
     {
-        float out_hi = ws.processSample(10.0f);
-        float out_lo = ws.processSample(-10.0f);
-        // Must be within [-1,1] and monotone w.r.t clamp endpoints.
-        T_ASSERT(ctx, out_hi <= 1.0f + kEpsilon && out_hi >= 1.0f - 1e-3f);
-        T_ASSERT(ctx, out_lo >= -1.0f - kEpsilon && out_lo <= -1.0f + 1e-3f);
+      float out_hi = ws.processSample(10.0f);
+      float out_lo = ws.processSample(-10.0f);
+      // Must be within [-1,1] and monotone w.r.t clamp endpoints.
+      T_ASSERT(ctx, out_hi <= 1.0f + kEpsilon && out_hi >= 1.0f - 1e-3f);
+      T_ASSERT(ctx, out_lo >= -1.0f - kEpsilon && out_lo <= -1.0f + 1e-3f);
     }
 
     // Soft clip mode: still bounded, continuous, monotone; must not explode.
     ws.setUseSoftClipForInput(true);
     {
-        float out1 = ws.processSample(2.0f);
-        float out2 = ws.processSample(10.0f);
-        float out3 = ws.processSample(-2.0f);
-        float out4 = ws.processSample(-10.0f);
+      float out1 = ws.processSample(2.0f);
+      float out2 = ws.processSample(10.0f);
+      float out3 = ws.processSample(-2.0f);
+      float out4 = ws.processSample(-10.0f);
 
-        T_ASSERT(ctx, out1 <= 1.0f && out1 >= 0.0f);
-        T_ASSERT(ctx, out2 <= 1.0f && out2 >= 0.0f);
-        T_ASSERT(ctx, out3 >= -1.0f && out3 <= 0.0f);
-        T_ASSERT(ctx, out4 >= -1.0f && out4 <= 0.0f);
+      T_ASSERT(ctx, out1 <= 1.0f && out1 >= 0.0f);
+      T_ASSERT(ctx, out2 <= 1.0f && out2 >= 0.0f);
+      T_ASSERT(ctx, out3 >= -1.0f && out3 <= 0.0f);
+      T_ASSERT(ctx, out4 >= -1.0f && out4 <= 0.0f);
 
-        // Monotonicity for positive side: larger input should not yield smaller output.
-        T_ASSERT(ctx, out2 >= out1 - kEpsilon);
-        // Symmetry-ish: soft clip should preserve sign.
-        T_ASSERT(ctx, out1 > 0.0f);
-        T_ASSERT(ctx, out2 > 0.0f);
-        T_ASSERT(ctx, out3 < 0.0f);
-        T_ASSERT(ctx, out4 < 0.0f);
+      // Monotonicity for positive side: larger input should not yield smaller output.
+      T_ASSERT(ctx, out2 >= out1 - kEpsilon);
+      // Symmetry-ish: soft clip should preserve sign.
+      T_ASSERT(ctx, out1 > 0.0f);
+      T_ASSERT(ctx, out2 > 0.0f);
+      T_ASSERT(ctx, out3 < 0.0f);
+      T_ASSERT(ctx, out4 < 0.0f);
     }
-}
+  }
 
-void test_waveshaper_order_and_coefficients(TestContext& ctx) {
+  void test_waveshaper_order_and_coefficients(TestContext &ctx)
+  {
     using ShortwavDSP::ChebyshevWaveshaper;
 
     ChebyshevWaveshaper<4> ws;
@@ -138,11 +154,12 @@ void test_waveshaper_order_and_coefficients(TestContext& ctx) {
     ws.setCoefficient(1, 0.0f);
     ws.setCoefficient(2, 1.0f);
 
-    const float xs[] = { -1.0f, -0.5f, 0.0f, 0.3f, 0.7f, 1.0f };
-    for (float x : xs) {
-        float out = ws.processSample(x);
-        float expected = 2.0f * x * x - 1.0f;
-        T_ASSERT_NEAR(ctx, out, expected, 5e-4f);
+    const float xs[] = {-1.0f, -0.5f, 0.0f, 0.3f, 0.7f, 1.0f};
+    for (float x : xs)
+    {
+      float out = ws.processSample(x);
+      float expected = 2.0f * x * x - 1.0f;
+      T_ASSERT_NEAR(ctx, out, expected, 5e-4f);
     }
 
     // Increasing order should not break continuity near 0 for reasonable coeffs.
@@ -153,8 +170,8 @@ void test_waveshaper_order_and_coefficients(TestContext& ctx) {
     ws.setCoefficient(4, 0.05f);
 
     float x1 = -0.001f;
-    float x2 =  0.0f;
-    float x3 =  0.001f;
+    float x2 = 0.0f;
+    float x3 = 0.001f;
     float y1 = ws.processSample(x1);
     float y2 = ws.processSample(x2);
     float y3 = ws.processSample(x3);
@@ -162,9 +179,10 @@ void test_waveshaper_order_and_coefficients(TestContext& ctx) {
     // Check small neighborhood is continuous and monotone-ish around 0.
     T_ASSERT(ctx, std::fabs(y1 - y2) < 1e-3f);
     T_ASSERT(ctx, std::fabs(y3 - y2) < 1e-3f);
-}
+  }
 
-void test_waveshaper_process_buffer(TestContext& ctx) {
+  void test_waveshaper_process_buffer(TestContext &ctx)
+  {
     using ShortwavDSP::ChebyshevWaveshaper;
 
     ChebyshevWaveshaper<2> ws;
@@ -172,23 +190,26 @@ void test_waveshaper_process_buffer(TestContext& ctx) {
     ws.setOrder(1);
     ws.setUseSoftClipForInput(false);
 
-    const std::vector<float> in = { -1.f, -0.5f, 0.f, 0.5f, 1.f };
+    const std::vector<float> in = {-1.f, -0.5f, 0.f, 0.5f, 1.f};
     std::vector<float> out(in.size(), 0.0f);
 
     ws.processBuffer(in.data(), out.data(), in.size());
-    for (size_t i = 0; i < in.size(); ++i) {
-        T_ASSERT_NEAR(ctx, out[i], in[i], kTightEpsilon);
+    for (size_t i = 0; i < in.size(); ++i)
+    {
+      T_ASSERT_NEAR(ctx, out[i], in[i], kTightEpsilon);
     }
 
     // In-place must also be correct.
     std::vector<float> inout = in;
     ws.processBuffer(inout.data(), inout.data(), inout.size());
-    for (size_t i = 0; i < in.size(); ++i) {
-        T_ASSERT_NEAR(ctx, inout[i], in[i], kTightEpsilon);
+    for (size_t i = 0; i < in.size(); ++i)
+    {
+      T_ASSERT_NEAR(ctx, inout[i], in[i], kTightEpsilon);
     }
-}
+  }
 
-void test_waveshaper_invalid_params_and_denorm_guard(TestContext& ctx) {
+  void test_waveshaper_invalid_params_and_denorm_guard(TestContext &ctx)
+  {
     using ShortwavDSP::ChebyshevWaveshaper;
 
     ChebyshevWaveshaper<2> ws;
@@ -212,13 +233,14 @@ void test_waveshaper_invalid_params_and_denorm_guard(TestContext& ctx) {
     // and finite to avoid denorm/performance issues.
     T_ASSERT(ctx, std::fabs(out) < 1e-15f);
     T_ASSERT(ctx, std::isfinite(out));
-}
+  }
 
-//------------------------------------------------------------------------------
-// RandomLFO tests
-//------------------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+  // RandomLFO tests
+  //------------------------------------------------------------------------------
 
-void test_randomlfo_basic_determinism(TestContext& ctx) {
+  void test_randomlfo_basic_determinism(TestContext &ctx)
+  {
     using ShortwavDSP::RandomLFO;
 
     RandomLFO lfo1;
@@ -243,14 +265,16 @@ void test_randomlfo_basic_determinism(TestContext& ctx) {
     lfo2.setBipolar(true);
 
     // Same configuration and seed => identical sequence.
-    for (int i = 0; i < 2048; ++i) {
-        float a = lfo1.processSample();
-        float b = lfo2.processSample();
-        T_ASSERT_NEAR(ctx, a, b, kTightEpsilon);
+    for (int i = 0; i < 2048; ++i)
+    {
+      float a = lfo1.processSample();
+      float b = lfo2.processSample();
+      T_ASSERT_NEAR(ctx, a, b, kTightEpsilon);
     }
-}
+  }
 
-void test_randomlfo_rate_and_phase_behavior(TestContext& ctx) {
+  void test_randomlfo_rate_and_phase_behavior(TestContext &ctx)
+  {
     using ShortwavDSP::RandomLFO;
 
     RandomLFO lfo;
@@ -262,16 +286,18 @@ void test_randomlfo_rate_and_phase_behavior(TestContext& ctx) {
     lfo.setSmooth(0.5f);
 
     // With nonzero rate, target should change occasionally.
-    lfo.setRate(10.0f); // 10 new targets per second
+    lfo.setRate(10.0f);             // 10 new targets per second
     const int totalSamples = 48000; // 1 second
     float first = lfo.processSample();
     bool changed = false;
-    for (int i = 1; i < totalSamples; ++i) {
-        float v = lfo.processSample();
-        if (std::fabs(v - first) > 1e-4f) {
-            changed = true;
-            break;
-        }
+    for (int i = 1; i < totalSamples; ++i)
+    {
+      float v = lfo.processSample();
+      if (std::fabs(v - first) > 1e-4f)
+      {
+        changed = true;
+        break;
+      }
     }
     T_ASSERT(ctx, changed);
 
@@ -280,18 +306,21 @@ void test_randomlfo_rate_and_phase_behavior(TestContext& ctx) {
     lfo.setRate(0.0f);
     float prev = lfo.processSample();
     bool stayedSimilar = true;
-    for (int i = 0; i < 2000; ++i) {
-        float v = lfo.processSample();
-        if (std::fabs(v - prev) > 0.05f) {
-            stayedSimilar = false;
-            break;
-        }
-        prev = v;
+    for (int i = 0; i < 2000; ++i)
+    {
+      float v = lfo.processSample();
+      if (std::fabs(v - prev) > 0.05f)
+      {
+        stayedSimilar = false;
+        break;
+      }
+      prev = v;
     }
     T_ASSERT(ctx, stayedSimilar);
-}
+  }
 
-void test_randomlfo_bipolar_unipolar_and_depth(TestContext& ctx) {
+  void test_randomlfo_bipolar_unipolar_and_depth(TestContext &ctx)
+  {
     using ShortwavDSP::RandomLFO;
 
     RandomLFO lfo;
@@ -304,10 +333,11 @@ void test_randomlfo_bipolar_unipolar_and_depth(TestContext& ctx) {
     // Unipolar [0,1] with depth 1.
     lfo.setBipolar(false);
     lfo.setDepth(1.0f);
-    for (int i = 0; i < 2048; ++i) {
-        float v = lfo.processSample();
-        T_ASSERT(ctx, v >= 0.0f - kEpsilon);
-        T_ASSERT(ctx, v <= 1.0f + kEpsilon);
+    for (int i = 0; i < 2048; ++i)
+    {
+      float v = lfo.processSample();
+      T_ASSERT(ctx, v >= 0.0f - kEpsilon);
+      T_ASSERT(ctx, v <= 1.0f + kEpsilon);
     }
 
     // Bipolar [-1,1] with depth 1.
@@ -315,10 +345,11 @@ void test_randomlfo_bipolar_unipolar_and_depth(TestContext& ctx) {
     lfo.seed(123u);
     lfo.setBipolar(true);
     lfo.setDepth(1.0f);
-    for (int i = 0; i < 2048; ++i) {
-        float v = lfo.processSample();
-        T_ASSERT(ctx, v >= -1.0f - kEpsilon);
-        T_ASSERT(ctx, v <=  1.0f + kEpsilon);
+    for (int i = 0; i < 2048; ++i)
+    {
+      float v = lfo.processSample();
+      T_ASSERT(ctx, v >= -1.0f - kEpsilon);
+      T_ASSERT(ctx, v <= 1.0f + kEpsilon);
     }
 
     // Depth scaling: with depth=0.25 bipolar, outputs must be within [-0.25,0.25].
@@ -326,14 +357,16 @@ void test_randomlfo_bipolar_unipolar_and_depth(TestContext& ctx) {
     lfo.seed(123u);
     lfo.setBipolar(true);
     lfo.setDepth(0.25f);
-    for (int i = 0; i < 2048; ++i) {
-        float v = lfo.processSample();
-        T_ASSERT(ctx, v >= -0.25f - kEpsilon);
-        T_ASSERT(ctx, v <=  0.25f + kEpsilon);
+    for (int i = 0; i < 2048; ++i)
+    {
+      float v = lfo.processSample();
+      T_ASSERT(ctx, v >= -0.25f - kEpsilon);
+      T_ASSERT(ctx, v <= 0.25f + kEpsilon);
     }
-}
+  }
 
-void test_randomlfo_smooth_parameter_effect(TestContext& ctx) {
+  void test_randomlfo_smooth_parameter_effect(TestContext &ctx)
+  {
     using ShortwavDSP::RandomLFO;
 
     RandomLFO lowSmooth;
@@ -368,13 +401,14 @@ void test_randomlfo_smooth_parameter_effect(TestContext& ctx) {
     float highAccum = 0.f;
     const int N = 8000;
 
-    for (int i = 1; i < N; ++i) {
-        float lv = lowSmooth.processSample();
-        float hv = highSmooth.processSample();
-        lowAccum += std::fabs(lv - lowPrev);
-        highAccum += std::fabs(hv - highPrev);
-        lowPrev = lv;
-        highPrev = hv;
+    for (int i = 1; i < N; ++i)
+    {
+      float lv = lowSmooth.processSample();
+      float hv = highSmooth.processSample();
+      lowAccum += std::fabs(lv - lowPrev);
+      highAccum += std::fabs(hv - highPrev);
+      lowPrev = lv;
+      highPrev = hv;
     }
 
     const float lowAvgStep = lowAccum / (N - 1);
@@ -384,9 +418,10 @@ void test_randomlfo_smooth_parameter_effect(TestContext& ctx) {
     // lower smoothness should not yield LESS movement than higher smoothness.
     T_ASSERT(ctx, lowAvgStep >= highAvgStep * 0.8f);
     T_ASSERT(ctx, lowAvgStep <= 0.05f + 0.5f); // keep extremely loose, just guard against explosions
-}
+  }
 
-void test_randomlfo_boundary_conditions(TestContext& ctx) {
+  void test_randomlfo_boundary_conditions(TestContext &ctx)
+  {
     using ShortwavDSP::RandomLFO;
 
     RandomLFO lfo;
@@ -401,10 +436,11 @@ void test_randomlfo_boundary_conditions(TestContext& ctx) {
     lfo.setBipolar(false);
 
     // Over a moderate buffer, output should remain in range and not blow up.
-    for (int i = 0; i < 192000; ++i) {
-        float v = lfo.processSample();
-        T_ASSERT(ctx, v >= 0.0f - kEpsilon);
-        T_ASSERT(ctx, v <= 1.0f + kEpsilon);
+    for (int i = 0; i < 192000; ++i)
+    {
+      float v = lfo.processSample();
+      T_ASSERT(ctx, v >= 0.0f - kEpsilon);
+      T_ASSERT(ctx, v <= 1.0f + kEpsilon);
     }
 
     // Reset/reseed sanity:
@@ -416,14 +452,14 @@ void test_randomlfo_boundary_conditions(TestContext& ctx) {
     lfo.seed(1u);
     float v1 = lfo.processSample();
     T_ASSERT(ctx, std::isfinite(v1));
-}
+  }
 
-//------------------------------------------------------------------------------
-// DriftGenerator tests
-//------------------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+  // DriftGenerator tests
+  //------------------------------------------------------------------------------
 
-void test_drift_generator_basic_finiteness(TestContext& ctx)
-{
+  void test_drift_generator_basic_finiteness(TestContext &ctx)
+  {
     using ShortwavDSP::DriftGenerator;
 
     DriftGenerator drift;
@@ -439,20 +475,22 @@ void test_drift_generator_basic_finiteness(TestContext& ctx)
 
     for (int i = 0; i < 44100 * 10; ++i) // 10 seconds
     {
-        float v = drift.next();
-        T_ASSERT(ctx, std::isfinite(v));
+      float v = drift.next();
+      T_ASSERT(ctx, std::isfinite(v));
 
-        if (v < minV) minV = v;
-        if (v > maxV) maxV = v;
+      if (v < minV)
+        minV = v;
+      if (v > maxV)
+        maxV = v;
     }
 
     // Extremely loose bounds: drift should not explode to huge values.
     T_ASSERT(ctx, minV > -5.0f);
-    T_ASSERT(ctx, maxV <  5.0f);
-}
+    T_ASSERT(ctx, maxV < 5.0f);
+  }
 
-void test_drift_generator_continuity(TestContext& ctx)
-{
+  void test_drift_generator_continuity(TestContext &ctx)
+  {
     using ShortwavDSP::DriftGenerator;
 
     DriftGenerator drift;
@@ -467,23 +505,23 @@ void test_drift_generator_continuity(TestContext& ctx)
 
     for (int i = 0; i < 48000 * 5; ++i)
     {
-        float v = drift.next();
-        float step = std::fabs(v - prev);
+      float v = drift.next();
+      float step = std::fabs(v - prev);
 
-        // Steps should be tiny for slow drift; allow a loose but finite bound.
-        if (step > 0.1f)
-        {
-            hasReasonableContinuity = false;
-            break;
-        }
-        prev = v;
+      // Steps should be tiny for slow drift; allow a loose but finite bound.
+      if (step > 0.1f)
+      {
+        hasReasonableContinuity = false;
+        break;
+      }
+      prev = v;
     }
 
     T_ASSERT(ctx, hasReasonableContinuity);
-}
+  }
 
-void test_drift_generator_determinism(TestContext& ctx)
-{
+  void test_drift_generator_determinism(TestContext &ctx)
+  {
     using ShortwavDSP::DriftGenerator;
 
     DriftGenerator a;
@@ -506,14 +544,14 @@ void test_drift_generator_determinism(TestContext& ctx)
 
     for (int i = 0; i < 44100 * 4; ++i)
     {
-        float va = a.next();
-        float vb = b.next();
-        T_ASSERT_NEAR(ctx, va, vb, 1e-6f);
+      float va = a.next();
+      float vb = b.next();
+      T_ASSERT_NEAR(ctx, va, vb, 1e-6f);
     }
-}
+  }
 
-void test_drift_generator_parameter_effects(TestContext& ctx)
-{
+  void test_drift_generator_parameter_effects(TestContext &ctx)
+  {
     using ShortwavDSP::DriftGenerator;
 
     DriftGenerator slow;
@@ -543,12 +581,12 @@ void test_drift_generator_parameter_effects(TestContext& ctx)
 
     for (int i = 1; i < N; ++i)
     {
-        float vs = slow.next();
-        float vf = fast.next();
-        accSlow += std::fabs(vs - prevSlow);
-        accFast += std::fabs(vf - prevFast);
-        prevSlow = vs;
-        prevFast = vf;
+      float vs = slow.next();
+      float vf = fast.next();
+      accSlow += std::fabs(vs - prevSlow);
+      accFast += std::fabs(vf - prevFast);
+      prevSlow = vs;
+      prevFast = vf;
     }
 
     const float avgSlow = accSlow / (N - 1);
@@ -556,10 +594,10 @@ void test_drift_generator_parameter_effects(TestContext& ctx)
 
     // Qualitative: faster rate should yield more average movement.
     T_ASSERT(ctx, avgFast > avgSlow * 1.2f);
-}
+  }
 
-void test_drift_generator_boundary_conditions(TestContext& ctx)
-{
+  void test_drift_generator_boundary_conditions(TestContext &ctx)
+  {
     using ShortwavDSP::DriftGenerator;
 
     DriftGenerator drift;
@@ -572,16 +610,16 @@ void test_drift_generator_boundary_conditions(TestContext& ctx)
 
     for (int i = 0; i < 192000; ++i)
     {
-        float v = drift.next();
-        // Must remain finite and not blow up even with extreme settings.
-        T_ASSERT(ctx, std::isfinite(v));
-        T_ASSERT(ctx, v > -10.0f);
-        T_ASSERT(ctx, v <  10.0f);
+      float v = drift.next();
+      // Must remain finite and not blow up even with extreme settings.
+      T_ASSERT(ctx, std::isfinite(v));
+      T_ASSERT(ctx, v > -10.0f);
+      T_ASSERT(ctx, v < 10.0f);
     }
-}
+  }
 
-// Entry point to run all tests when this TU is built as a standalone test binary.
-// In normal plugin builds this file is not included.
+  // Entry point to run all tests when this TU is built as a standalone test binary.
+  // In normal plugin builds this file is not included.
 } // namespace
 
 // Standalone test runner entry point.
@@ -591,31 +629,32 @@ void test_drift_generator_boundary_conditions(TestContext& ctx)
 // This avoids conflicting with any host/plugin-defined main() when the file is
 // merely compiled but not intended as the executable entry.
 #ifdef SHORTWAV_DSP_RUN_TESTS
-int main() {
-    ::TestContext ctx;
+int main()
+{
+  ::TestContext ctx;
 
-    // ChebyshevWaveshaper
-    ::test_waveshaper_basic_linear(ctx);
-    ::test_waveshaper_input_clamp_and_softclip(ctx);
-    ::test_waveshaper_order_and_coefficients(ctx);
-    ::test_waveshaper_process_buffer(ctx);
-    ::test_waveshaper_invalid_params_and_denorm_guard(ctx);
+  // ChebyshevWaveshaper
+  ::test_waveshaper_basic_linear(ctx);
+  ::test_waveshaper_input_clamp_and_softclip(ctx);
+  ::test_waveshaper_order_and_coefficients(ctx);
+  ::test_waveshaper_process_buffer(ctx);
+  ::test_waveshaper_invalid_params_and_denorm_guard(ctx);
 
-    // RandomLFO
-    ::test_randomlfo_basic_determinism(ctx);
-    ::test_randomlfo_rate_and_phase_behavior(ctx);
-    ::test_randomlfo_bipolar_unipolar_and_depth(ctx);
-    ::test_randomlfo_smooth_parameter_effect(ctx);
-    ::test_randomlfo_boundary_conditions(ctx);
+  // RandomLFO
+  ::test_randomlfo_basic_determinism(ctx);
+  ::test_randomlfo_rate_and_phase_behavior(ctx);
+  ::test_randomlfo_bipolar_unipolar_and_depth(ctx);
+  ::test_randomlfo_smooth_parameter_effect(ctx);
+  ::test_randomlfo_boundary_conditions(ctx);
 
-    // DriftGenerator
-    ::test_drift_generator_basic_finiteness(ctx);
-    ::test_drift_generator_continuity(ctx);
-    ::test_drift_generator_determinism(ctx);
-    ::test_drift_generator_parameter_effects(ctx);
-    ::test_drift_generator_boundary_conditions(ctx);
+  // DriftGenerator
+  ::test_drift_generator_basic_finiteness(ctx);
+  ::test_drift_generator_continuity(ctx);
+  ::test_drift_generator_determinism(ctx);
+  ::test_drift_generator_parameter_effects(ctx);
+  ::test_drift_generator_boundary_conditions(ctx);
 
-    ctx.summary();
-    return (ctx.failed == 0) ? 0 : 1;
+  ctx.summary();
+  return (ctx.failed == 0) ? 0 : 1;
 }
 #endif

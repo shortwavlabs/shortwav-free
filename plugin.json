@@ -10,7 +10,7 @@
     {
       "slug": "RandomLfo",
       "name": "Random LFO",
-      "description": "A random lfo generator",
+      "description": "Random modulation source for evolving, organic parameter movement",
       "tags": [
         "LFO",
         "Random"
@@ -23,6 +23,15 @@
       "tags": [
         "Waveshaper",
         "Distortion",
+        "Utility"
+      ]
+    },
+    {
+      "slug": "Drift",
+      "name": "Drift",
+      "description": "Analog-style drift modulator using a smooth drift generator",
+      "tags": [
+        "Modulator",
         "Utility"
       ]
     }

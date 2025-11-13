@@ -69,53 +69,55 @@
 namespace ShortwavDSP
 {
 
-//------------------------------------------------------------------------------
-// Utility: tiny helper to avoid obvious denormal / extreme-domain issues
-//------------------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+  // Utility: tiny helper to avoid obvious denormal / extreme-domain issues
+  //------------------------------------------------------------------------------
 
-namespace detail
-{
+  namespace detail
+  {
     inline float softClipToUnit(float x) noexcept
     {
-        // For |x| <= 1 use linear region (no change).
-        // For |x| > 1 apply a fast soft saturation to keep |x| bounded.
-        //
-        // This keeps Chebyshev polynomials in a numerically reasonable range
-        // and preserves predictable harmonic behavior for normal signals
-        // while avoiding explosive growth for extreme values.
-        if (x > 1.0f)
-        {
-            // tanh-like saturation using x / (1 + |x|)
-            return 1.0f - 1.0f / (1.0f + x);
-        }
-        if (x < -1.0f)
-        {
-            const float ax = -x;
-            return -1.0f + 1.0f / (1.0f + ax);
-        }
-        return x;
+      // For |x| <= 1 use linear region (no change).
+      // For |x| > 1 apply a fast soft saturation to keep |x| bounded.
+      //
+      // This keeps Chebyshev polynomials in a numerically reasonable range
+      // and preserves predictable harmonic behavior for normal signals
+      // while avoiding explosive growth for extreme values.
+      if (x > 1.0f)
+      {
+        // tanh-like saturation using x / (1 + |x|)
+        return 1.0f - 1.0f / (1.0f + x);
+      }
+      if (x < -1.0f)
+      {
+        const float ax = -x;
+        return -1.0f + 1.0f / (1.0f + ax);
+      }
+      return x;
     }
 
     inline float clampToUnit(float x) noexcept
     {
-        if (x < -1.0f) return -1.0f;
-        if (x >  1.0f) return  1.0f;
-        return x;
+      if (x < -1.0f)
+        return -1.0f;
+      if (x > 1.0f)
+        return 1.0f;
+      return x;
     }
-} // namespace detail
+  } // namespace detail
 
-//------------------------------------------------------------------------------
-// Chebyshev polynomial evaluator (first kind, T_n)
-//------------------------------------------------------------------------------
-//
-// Provides efficient evaluation of T_n(x) and of weighted sums
-// sum_{n=0..N} a_n * T_n(x), using the stable forward recurrence.
-//------------------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+  // Chebyshev polynomial evaluator (first kind, T_n)
+  //------------------------------------------------------------------------------
+  //
+  // Provides efficient evaluation of T_n(x) and of weighted sums
+  // sum_{n=0..N} a_n * T_n(x), using the stable forward recurrence.
+  //------------------------------------------------------------------------------
 
-template <std::size_t MaxOrder>
-class ChebyshevEvaluator
-{
-public:
+  template <std::size_t MaxOrder>
+  class ChebyshevEvaluator
+  {
+  public:
     static_assert(MaxOrder > 0, "MaxOrder must be > 0.");
 
     ChebyshevEvaluator() = default;
@@ -132,22 +134,22 @@ public:
     // For n == 0 or 1 we return directly without looping.
     inline float evaluateSingle(std::size_t n, float x) const noexcept
     {
-        if (n == 0)
-            return 1.0f;
-        if (n == 1)
-            return x;
+      if (n == 0)
+        return 1.0f;
+      if (n == 1)
+        return x;
 
-        float Tnm1 = 1.0f;   // T_0
-        float Tn   = x;      // T_1
+      float Tnm1 = 1.0f; // T_0
+      float Tn = x;      // T_1
 
-        // Loop: from k = 1 to n-1 to compute T_{k+1}
-        for (std::size_t k = 1; k < n; ++k)
-        {
-            const float Tnp1 = 2.0f * x * Tn - Tnm1;
-            Tnm1 = Tn;
-            Tn   = Tnp1;
-        }
-        return Tn;
+      // Loop: from k = 1 to n-1 to compute T_{k+1}
+      for (std::size_t k = 1; k < n; ++k)
+      {
+        const float Tnp1 = 2.0f * x * Tn - Tnm1;
+        Tnm1 = Tn;
+        Tn = Tnp1;
+      }
+      return Tn;
     }
 
     // Evaluate a weighted Chebyshev series:
@@ -159,137 +161,137 @@ public:
     // and is intended to be called from the waveshaper process function.
     //
     // Implementation is single-pass and uses the same recurrence as above.
-    inline float evaluateSeries(const float* coeffs,
+    inline float evaluateSeries(const float *coeffs,
                                 std::size_t order,
                                 float x) const noexcept
     {
-        if (!coeffs || order == 0)
-        {
-            return 0.0f;
-        }
+      if (!coeffs || order == 0)
+      {
+        return 0.0f;
+      }
 
-        // Clamp order to supported range.
-        if (order > MaxOrder)
-            order = MaxOrder;
+      // Clamp order to supported range.
+      if (order > MaxOrder)
+        order = MaxOrder;
 
-        // T_0 and T_1 contributions
-        float sum = coeffs[0]; // coeff[0] * T_0 == coeff[0] * 1
+      // T_0 and T_1 contributions
+      float sum = coeffs[0]; // coeff[0] * T_0 == coeff[0] * 1
 
-        if (order == 1)
-        {
-            sum += coeffs[1] * x;
-            return sum;
-        }
-
-        float Tnm1 = 1.0f; // T_0
-        float Tn   = x;    // T_1
-        sum += coeffs[1] * Tn;
-
-        for (std::size_t n = 1; n < order; ++n)
-        {
-            const float Tnp1 = 2.0f * x * Tn - Tnm1;
-            Tnm1 = Tn;
-            Tn   = Tnp1;
-            sum += coeffs[n + 1] * Tn;
-        }
-
+      if (order == 1)
+      {
+        sum += coeffs[1] * x;
         return sum;
+      }
+
+      float Tnm1 = 1.0f; // T_0
+      float Tn = x;      // T_1
+      sum += coeffs[1] * Tn;
+
+      for (std::size_t n = 1; n < order; ++n)
+      {
+        const float Tnp1 = 2.0f * x * Tn - Tnm1;
+        Tnm1 = Tn;
+        Tn = Tnp1;
+        sum += coeffs[n + 1] * Tn;
+      }
+
+      return sum;
     }
-};
+  };
 
-//------------------------------------------------------------------------------
-// Chebyshev Waveshaper
-//------------------------------------------------------------------------------
-//
-// Public API:
-//   - Template parameter MaxOrder: maximum supported Chebyshev order.
-//   - setOrder(order):
-//        Sets the active highest polynomial order (1..MaxOrder).
-//   - setCoefficient(n, value):
-//        Sets the weight for T_n, 0 <= n <= MaxOrder.
-//   - setCoefficients(ptr, count):
-//        Bulk update of the first `count` coefficients.
-//   - setOutputGain(g):
-//        Overall linear output gain applied after the Chebyshev series.
-//   - setUseSoftClipForInput(bool):
-//        Choose between hard clamp or soft saturation for input domain control.
-//   - processSample(x):
-//        Apply Chebyshev waveshaping to a single sample.
-//   - processBuffer(in, out, numSamples):
-//        Apply waveshaping to a buffer (safe for in-place).
-//
-// Notes:
-//   - Real-time safe: no allocation, no locking.
-//   - Threading: expected usage is that parameter setters are called from a
-//     non-audio thread between blocks or using the host's standard mechanism.
-//     For lock-free cross-thread safety with sample-accurate automation,
-//     wrap access in your existing parameter / smoothing system.
-//------------------------------------------------------------------------------
+  //------------------------------------------------------------------------------
+  // Chebyshev Waveshaper
+  //------------------------------------------------------------------------------
+  //
+  // Public API:
+  //   - Template parameter MaxOrder: maximum supported Chebyshev order.
+  //   - setOrder(order):
+  //        Sets the active highest polynomial order (1..MaxOrder).
+  //   - setCoefficient(n, value):
+  //        Sets the weight for T_n, 0 <= n <= MaxOrder.
+  //   - setCoefficients(ptr, count):
+  //        Bulk update of the first `count` coefficients.
+  //   - setOutputGain(g):
+  //        Overall linear output gain applied after the Chebyshev series.
+  //   - setUseSoftClipForInput(bool):
+  //        Choose between hard clamp or soft saturation for input domain control.
+  //   - processSample(x):
+  //        Apply Chebyshev waveshaping to a single sample.
+  //   - processBuffer(in, out, numSamples):
+  //        Apply waveshaping to a buffer (safe for in-place).
+  //
+  // Notes:
+  //   - Real-time safe: no allocation, no locking.
+  //   - Threading: expected usage is that parameter setters are called from a
+  //     non-audio thread between blocks or using the host's standard mechanism.
+  //     For lock-free cross-thread safety with sample-accurate automation,
+  //     wrap access in your existing parameter / smoothing system.
+  //------------------------------------------------------------------------------
 
-template <std::size_t MaxOrder = 16u>
-class ChebyshevWaveshaper
-{
-public:
+  template <std::size_t MaxOrder = 16u>
+  class ChebyshevWaveshaper
+  {
+  public:
     ChebyshevWaveshaper() = default;
 
     // Set the active order (degree) N for the polynomial series.
     // Valid range: 1..MaxOrder. Values < 1 disable shaping (bypass-like).
     inline void setOrder(std::size_t order) noexcept
     {
-        if (order < 1)
-            activeOrder_ = 0;
-        else if (order > MaxOrder)
-            activeOrder_ = MaxOrder;
-        else
-            activeOrder_ = order;
+      if (order < 1)
+        activeOrder_ = 0;
+      else if (order > MaxOrder)
+        activeOrder_ = MaxOrder;
+      else
+        activeOrder_ = order;
     }
 
     inline std::size_t getOrder() const noexcept
     {
-        return activeOrder_;
+      return activeOrder_;
     }
 
     // Set individual coefficient for T_n.
     // n == 0 is DC term, typically 0 for purely AC / harmonic use.
     inline void setCoefficient(std::size_t n, float value) noexcept
     {
-        if (n > MaxOrder)
-            return;
-        coeffs_[n] = value;
+      if (n > MaxOrder)
+        return;
+      coeffs_[n] = value;
     }
 
     // Bulk-set first `count` coefficients from an array.
     // Extra entries beyond MaxOrder are ignored.
-    inline void setCoefficients(const float* values, std::size_t count) noexcept
+    inline void setCoefficients(const float *values, std::size_t count) noexcept
     {
-        if (!values || count == 0)
-            return;
+      if (!values || count == 0)
+        return;
 
-        const std::size_t limit = (count <= (MaxOrder + 1)) ? count : (MaxOrder + 1);
-        for (std::size_t i = 0; i < limit; ++i)
-        {
-            coeffs_[i] = values[i];
-        }
+      const std::size_t limit = (count <= (MaxOrder + 1)) ? count : (MaxOrder + 1);
+      for (std::size_t i = 0; i < limit; ++i)
+      {
+        coeffs_[i] = values[i];
+      }
     }
 
     // Reset all coefficients to zero and optionally set a simple default.
     // By default, we configure T_1(x) == x (i.e. coeffs_[1] = 1) and 0 elsewhere.
     inline void resetCoefficientsToLinear() noexcept
     {
-        for (std::size_t i = 0; i <= MaxOrder; ++i)
-            coeffs_[i] = 0.0f;
-        coeffs_[1] = 1.0f;
+      for (std::size_t i = 0; i <= MaxOrder; ++i)
+        coeffs_[i] = 0.0f;
+      coeffs_[1] = 1.0f;
     }
 
     // Set global output gain applied after Chebyshev series.
     inline void setOutputGain(float gain) noexcept
     {
-        outputGain_ = gain;
+      outputGain_ = gain;
     }
 
     inline float getOutputGain() const noexcept
     {
-        return outputGain_;
+      return outputGain_;
     }
 
     // Control input domain mapping strategy:
@@ -297,66 +299,66 @@ public:
     //  - When disabled, inputs are hard-clamped to [-1, 1].
     inline void setUseSoftClipForInput(bool enabled) noexcept
     {
-        useSoftClipInput_ = enabled;
+      useSoftClipInput_ = enabled;
     }
 
     inline bool getUseSoftClipForInput() const noexcept
     {
-        return useSoftClipInput_;
+      return useSoftClipInput_;
     }
 
     // Process a single sample through the Chebyshev waveshaper.
     inline float processSample(float in) const noexcept
     {
-        if (activeOrder_ == 0)
-        {
-            // Effectively bypass if no active order set.
-            return in;
-        }
+      if (activeOrder_ == 0)
+      {
+        // Effectively bypass if no active order set.
+        return in;
+      }
 
-        float x = useSoftClipInput_
+      float x = useSoftClipInput_
                     ? detail::softClipToUnit(in)
                     : detail::clampToUnit(in);
 
-        const float y = evaluator_.evaluateSeries(coeffs_.data(),
-                                                  activeOrder_,
-                                                  x);
+      const float y = evaluator_.evaluateSeries(coeffs_.data(),
+                                                activeOrder_,
+                                                x);
 
-        float out = y * outputGain_;
+      float out = y * outputGain_;
 
-        // Avoid propagating potential denorms (extremely unlikely here, but cheap).
-        if (std::abs(out) < 1.0e-30f)
-            out = 0.0f;
+      // Avoid propagating potential denorms (extremely unlikely here, but cheap).
+      if (std::abs(out) < 1.0e-30f)
+        out = 0.0f;
 
-        return out;
+      return out;
     }
 
     // Process a buffer of samples. Supports in-place processing (in == out).
-    inline void processBuffer(const float* in,
-                              float* out,
+    inline void processBuffer(const float *in,
+                              float *out,
                               std::size_t numSamples) const noexcept
     {
-        if (!in || !out || numSamples == 0)
-            return;
+      if (!in || !out || numSamples == 0)
+        return;
 
-        if (activeOrder_ == 0)
+      if (activeOrder_ == 0)
+      {
+        // Copy input to output without change if effectively bypassed.
+        if (in != out)
         {
-            // Copy input to output without change if effectively bypassed.
-            if (in != out)
-            {
-                for (std::size_t i = 0; i < numSamples; ++i)
-                    out[i] = in[i];
-            }
-            return;
+          for (std::size_t i = 0; i < numSamples; ++i)
+            out[i] = in[i];
         }
+        return;
+      }
 
-        for (std::size_t i = 0; i < numSamples; ++i)
-        {
-            out[i] = processSample(in[i]);
-        }
+      for (std::size_t i = 0; i < numSamples; ++i)
+      {
+        out[i] = processSample(in[i]);
+      }
     }
 
-private:
+  private:
     ChebyshevEvaluator<MaxOrder> evaluator_{};
 
     // coeffs_[n] is the weight for T_n(x).
@@ -372,6 +374,6 @@ private:
 
     // Whether to use soft saturation vs. hard clamp for input domain control.
     bool useSoftClipInput_ = true;
-};
+  };
 
 } // namespace ShortwavDSP
