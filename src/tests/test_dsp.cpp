@@ -16,6 +16,7 @@
 #include "../dsp/waveshaper.h"
 #include "../dsp/random-lfo.h"
 #include "../dsp/drift.h"
+#include "../dsp/formant-osc.h"
 
 namespace
 {
@@ -618,6 +619,343 @@ namespace
     }
   }
 
+  //------------------------------------------------------------------------------
+  // FormantOscillator tests
+  //------------------------------------------------------------------------------
+
+  void test_formantosc_basic_output(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(44100.0f);
+    osc.setCarrierFreq(110.0f);   // A2
+    osc.setFormantFreq(800.0f);   // Typical vowel formant
+    osc.setFormantWidth(0.3f);
+    osc.setOutputGain(1.0f);
+    osc.reset();
+
+    // Skip first few samples for DC blocker settling
+    for (int i = 0; i < 32; ++i)
+    {
+      osc.processSample();
+    }
+
+    // Generate 1024 samples and verify all are finite and bounded.
+    for (int i = 0; i < 1024; ++i)
+    {
+      float sample = osc.processSample();
+      T_ASSERT(ctx, std::isfinite(sample));
+      // Formant synthesis can produce peaks up to ~5x due to harmonic addition
+      T_ASSERT(ctx, sample >= -5.0f);
+      T_ASSERT(ctx, sample <= 5.0f);
+    }
+  }
+
+  void test_formantosc_silence_conditions(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(44100.0f);
+    osc.reset();
+
+    // Zero carrier frequency should produce silence.
+    osc.setCarrierFreq(0.0f);
+    osc.setFormantFreq(800.0f);
+    osc.setFormantWidth(0.5f);
+    osc.setOutputGain(1.0f);
+
+    for (int i = 0; i < 512; ++i)
+    {
+      float sample = osc.processSample();
+      T_ASSERT_NEAR(ctx, sample, 0.0f, kEpsilon);
+    }
+
+    // Zero output gain should produce silence.
+    osc.setCarrierFreq(110.0f);
+    osc.setOutputGain(0.0f);
+    osc.reset();
+
+    for (int i = 0; i < 512; ++i)
+    {
+      float sample = osc.processSample();
+      T_ASSERT_NEAR(ctx, sample, 0.0f, kEpsilon);
+    }
+  }
+
+  void test_formantosc_frequency_sweep(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(48000.0f);
+    osc.setFormantFreq(1000.0f);
+    osc.setFormantWidth(0.4f);
+    osc.setOutputGain(0.5f);
+    osc.reset();
+
+    // Sweep carrier frequency and verify output remains stable.
+    const float freqs[] = {55.0f, 110.0f, 220.0f, 440.0f, 880.0f, 1760.0f};
+    for (float freq : freqs)
+    {
+      osc.setCarrierFreq(freq);
+      osc.reset();
+
+      bool allFinite = true;
+      for (int i = 0; i < 256; ++i)
+      {
+        float sample = osc.processSample();
+        if (!std::isfinite(sample))
+        {
+          allFinite = false;
+          break;
+        }
+      }
+      T_ASSERT(ctx, allFinite);
+    }
+  }
+
+  void test_formantosc_formant_width_parameter(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(44100.0f);
+    osc.setCarrierFreq(200.0f);
+    osc.setFormantFreq(1200.0f);
+    osc.setOutputGain(1.0f);
+
+    // Test different formant widths from narrow to wide.
+    const float widths[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
+    for (float width : widths)
+    {
+      osc.setFormantWidth(width);
+      osc.reset();
+
+      // Skip settling time
+      for (int j = 0; j < 32; ++j)
+      {
+        osc.processSample();
+      }
+
+      // Verify output is finite and bounded for each width setting.
+      bool valid = true;
+      for (int i = 0; i < 512; ++i)
+      {
+        float sample = osc.processSample();
+        // Very wide formants (width near 1.0) can produce large peaks
+        if (!std::isfinite(sample) || std::fabs(sample) > 10.0f)
+        {
+          valid = false;
+          break;
+        }
+      }
+      T_ASSERT(ctx, valid);
+    }
+  }
+
+  void test_formantosc_dc_offset_removal(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(44100.0f);
+    osc.setCarrierFreq(100.0f);
+    osc.setFormantFreq(600.0f);
+    osc.setFormantWidth(0.5f);
+    osc.setOutputGain(1.0f);
+    osc.reset();
+
+    // Generate many samples and compute average (should be near zero due to DC blocker).
+    float sum = 0.0f;
+    const int numSamples = 44100; // 1 second
+    for (int i = 0; i < numSamples; ++i)
+    {
+      float sample = osc.processSample();
+      sum += sample;
+    }
+
+    float average = sum / static_cast<float>(numSamples);
+    // DC blocker should keep average near zero (tolerance depends on content).
+    T_ASSERT(ctx, std::fabs(average) < 0.05f);
+  }
+
+  void test_formantosc_denormal_guard(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(44100.0f);
+    osc.setCarrierFreq(110.0f);
+    osc.setFormantFreq(800.0f);
+    osc.setFormantWidth(0.3f);
+    osc.setOutputGain(1e-20f); // Extremely small gain
+    osc.reset();
+
+    // Verify output is very small (denormal guard should prevent denormals).
+    for (int i = 0; i < 256; ++i)
+    {
+      float sample = osc.processSample();
+      T_ASSERT(ctx, std::isfinite(sample));
+      // With very small gain, output should be negligible or zero
+      T_ASSERT(ctx, std::fabs(sample) < 1e-15f);
+    }
+  }
+
+  void test_formantosc_high_frequency_stability(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(48000.0f);
+    osc.setCarrierFreq(8000.0f);   // High frequency carrier
+    osc.setFormantFreq(12000.0f);  // Even higher formant
+    osc.setFormantWidth(0.6f);
+    osc.setOutputGain(1.0f);
+    osc.reset();
+
+    // Verify no infinities or NaNs at high frequencies.
+    bool allFinite = true;
+    for (int i = 0; i < 512; ++i)
+    {
+      float sample = osc.processSample();
+      if (!std::isfinite(sample))
+      {
+        allFinite = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allFinite);
+  }
+
+  void test_formantosc_buffer_processing(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(44100.0f);
+    osc.setCarrierFreq(220.0f);
+    osc.setFormantFreq(1500.0f);
+    osc.setFormantWidth(0.4f);
+    osc.setOutputGain(0.8f);
+    osc.reset();
+
+    const size_t bufferSize = 256;
+    std::vector<float> outputBuffer(bufferSize);
+
+    // Skip settling time
+    for (int i = 0; i < 32; ++i)
+    {
+      osc.processSample();
+    }
+
+    // Process buffer without input (pure oscillator).
+    osc.processBuffer(nullptr, outputBuffer.data(), bufferSize);
+
+    // Verify all samples are finite and within reasonable bounds.
+    for (size_t i = 0; i < bufferSize; ++i)
+    {
+      T_ASSERT(ctx, std::isfinite(outputBuffer[i]));
+      T_ASSERT(ctx, std::fabs(outputBuffer[i]) < 5.0f);
+    }
+
+    // Process buffer with input (ring modulation mode).
+    std::vector<float> inputBuffer(bufferSize);
+    for (size_t i = 0; i < bufferSize; ++i)
+    {
+      inputBuffer[i] = 0.1f * std::sin(2.0f * 3.14159265359f * 50.0f * static_cast<float>(i) / 44100.0f);
+    }
+
+    osc.reset();
+    osc.processBuffer(inputBuffer.data(), outputBuffer.data(), bufferSize);
+
+    // Verify all samples are finite (oscillator + input).
+    for (size_t i = 0; i < bufferSize; ++i)
+    {
+      T_ASSERT(ctx, std::isfinite(outputBuffer[i]));
+    }
+  }
+
+  void test_formantosc_phase_continuity(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(44100.0f);
+    osc.setCarrierFreq(440.0f);
+    osc.setFormantFreq(2000.0f);
+    osc.setFormantWidth(0.3f);
+    osc.setOutputGain(1.0f);
+    osc.reset();
+
+    // Skip settling time for DC blocker
+    for (int i = 0; i < 64; ++i)
+    {
+      osc.processSample();
+    }
+
+    // Generate samples and verify no discontinuities (no sudden jumps > threshold).
+    float prev = osc.processSample();
+    bool continuous = true;
+    const float maxJump = 4.0f; // Threshold for continuity - formant peaks can be large
+
+    for (int i = 1; i < 1024; ++i)
+    {
+      float current = osc.processSample();
+      float jump = std::fabs(current - prev);
+      if (jump > maxJump)
+      {
+        continuous = false;
+        break;
+      }
+      prev = current;
+    }
+    T_ASSERT(ctx, continuous);
+  }
+
+  void test_formantosc_parameter_clamping(TestContext &ctx)
+  {
+    using ShortwavDSP::FormantOscillator;
+
+    FormantOscillator osc;
+    osc.setSampleRate(44100.0f);
+
+    // Test negative frequencies (should be clamped to zero).
+    osc.setCarrierFreq(-100.0f);
+    osc.setFormantFreq(-500.0f);
+    osc.setFormantWidth(0.5f);
+    osc.setOutputGain(1.0f);
+    osc.reset();
+
+    // Should produce silence due to zero carrier frequency.
+    for (int i = 0; i < 256; ++i)
+    {
+      float sample = osc.processSample();
+      T_ASSERT_NEAR(ctx, sample, 0.0f, kEpsilon);
+    }
+
+    // Test out-of-range width (should be clamped to [0, 1]).
+    osc.setCarrierFreq(220.0f);
+    osc.setFormantFreq(1000.0f);
+    osc.setFormantWidth(10.0f); // Way out of range
+    osc.setOutputGain(1.0f);
+    osc.reset();
+
+    // Should still produce valid output (width clamped internally).
+    bool valid = true;
+    for (int i = 0; i < 256; ++i)
+    {
+      float sample = osc.processSample();
+      if (!std::isfinite(sample))
+      {
+        valid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, valid);
+  }
+
   // Entry point to run all tests when this TU is built as a standalone test binary.
   // In normal plugin builds this file is not included.
 } // namespace
@@ -653,6 +991,18 @@ int main()
   ::test_drift_generator_determinism(ctx);
   ::test_drift_generator_parameter_effects(ctx);
   ::test_drift_generator_boundary_conditions(ctx);
+
+  // FormantOscillator
+  ::test_formantosc_basic_output(ctx);
+  ::test_formantosc_silence_conditions(ctx);
+  ::test_formantosc_frequency_sweep(ctx);
+  ::test_formantosc_formant_width_parameter(ctx);
+  ::test_formantosc_dc_offset_removal(ctx);
+  ::test_formantosc_denormal_guard(ctx);
+  ::test_formantosc_high_frequency_stability(ctx);
+  ::test_formantosc_buffer_processing(ctx);
+  ::test_formantosc_phase_continuity(ctx);
+  ::test_formantosc_parameter_clamping(ctx);
 
   ctx.summary();
   return (ctx.failed == 0) ? 0 : 1;

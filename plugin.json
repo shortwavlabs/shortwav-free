@@ -34,6 +34,15 @@
         "Modulator",
         "Utility"
       ]
+    },
+    {
+      "slug": "FormantOsc",
+      "name": "Formant Oscillator",
+      "description": "AM formant synthesis oscillator for vowel-like timbres without filters",
+      "tags": [
+        "Oscillator",
+        "Synth voice"
+      ]
     }
   ]
 }

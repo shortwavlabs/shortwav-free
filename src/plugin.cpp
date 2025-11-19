@@ -9,4 +9,5 @@ void init(Plugin *p) {
 	p->addModel(modelRandomLfo);
 	p->addModel(modelWaveshaper);
 	p->addModel(modelDrift);
+	p->addModel(modelFormantOsc);
 }

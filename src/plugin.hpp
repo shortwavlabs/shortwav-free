@@ -8,6 +8,7 @@ extern Plugin *pluginInstance;
 extern Model *modelRandomLfo;
 extern Model *modelWaveshaper;
 extern Model *modelDrift;
+extern Model *modelFormantOsc;
 
 // Declare each Model, defined in each module source file
 // extern Model *modelMyModule;
