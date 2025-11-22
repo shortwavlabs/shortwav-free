@@ -7,10 +7,12 @@ Professional 3-band equalizer with adjustable crossover frequencies and ±12dB g
 ## Key Features
 
 - ✅ **High-quality 24dB/octave filters** (4-pole cascaded design)
+- ✅ **Real-time frequency response visualization** with color-coded bands
+- ✅ **Gain level meters** with peak hold indicators
 - ✅ **Adjustable crossovers**: Low (80-250Hz), High (1-4kHz)
 - ✅ **±12dB gain range** per band
 - ✅ **Stereo processing** with independent L/R channels
-- ✅ **CV modulation** for all parameters
+- ✅ **CV modulation** for all parameters (visualized in real-time)
 - ✅ **6 built-in presets** (Bass Boost, Vocal Enhance, Bright, Warm, Smiley, Flat)
 - ✅ **Real-time safe** (no allocations, no locks)
 - ✅ **Denormal protected**
@@ -40,9 +42,27 @@ Professional 3-band equalizer with adjustable crossover frequencies and ±12dB g
 - **Latency**: ~3 samples (0.06ms @ 48kHz)
 - **Tested**: 1.59M+ automated test assertions
 
+## Visualization Features
+
+The module includes two real-time displays:
+
+1. **Frequency Response Display**: Shows EQ curve from 20Hz-20kHz with logarithmic scale
+   - Color-coded frequency bands (red=low, green=mid, blue=high)
+   - Golden response curve updates in real-time
+   - Crossover frequency markers
+   - Numerical gain readouts
+
+2. **Gain Meter Display**: Three vertical meters with peak hold
+   - Independent meters for Low/Mid/High bands
+   - Peak hold indicators (1.5s duration)
+   - Real-time numerical values
+
+See [`docs/ThreeBandEQ_Visualization.md`](./ThreeBandEQ_Visualization.md) for complete visualization documentation.
+
 ## Full Documentation
 
-See [`docs/ThreeBandEQ.md`](./ThreeBandEQ.md) for complete implementation details, API reference, and integration guide.
+- [`docs/ThreeBandEQ.md`](./ThreeBandEQ.md) - Complete implementation details, API reference, and integration guide
+- [`docs/ThreeBandEQ_Visualization.md`](./ThreeBandEQ_Visualization.md) - Visualization features documentation
 
 ## Build & Test
 

@@ -2,6 +2,7 @@
 
 #include "plugin.hpp"
 #include "dsp/3-band-eq.h"
+#include "ThreeBandEQDisplay.hpp"
 
 struct ThreeBandEQ : Module
 {
@@ -112,12 +113,26 @@ struct ThreeBandEQWidget : ModuleWidget
   ThreeBandEQWidget(ThreeBandEQ *module)
   {
     setModule(module);
-    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/9HP_BLANK.svg")));
+    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/28HP_BLANK.svg")));
 
     addChild(createWidget<ScrewSilver>(Vec(0, 0)));
     addChild(createWidget<ScrewSilver>(Vec(box.size.x - 1 * RACK_GRID_WIDTH, 0)));
     addChild(createWidget<ScrewSilver>(Vec(0, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
     addChild(createWidget<ScrewSilver>(Vec(box.size.x - 1 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
+
+    // Frequency Response Display (top visualization)
+    EQFrequencyResponseDisplay *freqDisplay = new EQFrequencyResponseDisplay();
+    freqDisplay->box.pos = Vec(85, 20);
+    freqDisplay->box.size = Vec(200, 80);
+    freqDisplay->module = module;
+    addChild(freqDisplay);
+
+    // Gain Meter Display (middle visualization)
+    // EQGainMeterDisplay *gainDisplay = new EQGainMeterDisplay();
+    // gainDisplay->box.pos = Vec(85, 110);
+    // gainDisplay->box.size = Vec(200, 60);
+    // gainDisplay->module = module;
+    // addChild(gainDisplay);
 
     // Crossover frequency knobs
     addParam(createParam<RoundLargeBlackKnob>(Vec(33, 20), module, ThreeBandEQ::LOW_FREQ_PARAM));

@@ -4,6 +4,8 @@
 
 The **3-Band EQ** module is a high-quality three-band equalizer designed for the ShortwavFree plugin suite. It provides professional-grade frequency band control with adjustable crossover frequencies and independent gain control for low, mid, and high frequency ranges.
 
+**NEW**: The module now includes comprehensive **real-time visualization features**, including a frequency response display and gain level meters. See [ThreeBandEQ_Visualization.md](ThreeBandEQ_Visualization.md) for complete details.
+
 ## Algorithm Specification
 
 ### Source
