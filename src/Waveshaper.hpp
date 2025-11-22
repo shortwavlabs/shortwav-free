@@ -114,4 +114,104 @@ struct WaveshaperWidget : ModuleWidget
     addInput(createInput<PJ301MPort>(Vec(10, 320), module, Waveshaper::SIGNAL_INPUT));
     addOutput(createOutput<PJ301MPort>(Vec(55, 320), module, Waveshaper::SIGNAL_OUTPUT));
   }
+
+  void appendContextMenu(Menu *menu) override
+  {
+    Waveshaper *module = dynamic_cast<Waveshaper *>(this->module);
+
+    menu->addChild(new MenuEntry);
+    menu->addChild(createMenuLabel("Waveshaper"));
+
+    menu->addChild(new MenuEntry);
+
+    struct PresetItem : MenuItem
+    {
+      Waveshaper *module;
+      int preset;
+      void onAction(const event::Action &e) override
+      {
+        switch (preset)
+        {
+        case 0: // Clean (Linear)
+          module->params[Waveshaper::INPUT_GAIN_PARAM].setValue(1.f);
+          module->params[Waveshaper::OUTPUT_GAIN_PARAM].setValue(1.f);
+          module->params[Waveshaper::ORDER_PARAM].setValue(1.f);
+          module->params[Waveshaper::SOFTCLIP_PARAM].setValue(1.f);
+          module->params[Waveshaper::HARM1_PARAM].setValue(1.f);
+          module->params[Waveshaper::HARM2_PARAM].setValue(0.f);
+          module->params[Waveshaper::HARM3_PARAM].setValue(0.f);
+          module->params[Waveshaper::HARM4_PARAM].setValue(0.f);
+          break;
+        case 1: // Soft Overdrive
+          module->params[Waveshaper::INPUT_GAIN_PARAM].setValue(1.5f);
+          module->params[Waveshaper::OUTPUT_GAIN_PARAM].setValue(0.8f);
+          module->params[Waveshaper::ORDER_PARAM].setValue(3.f);
+          module->params[Waveshaper::SOFTCLIP_PARAM].setValue(1.f);
+          module->params[Waveshaper::HARM1_PARAM].setValue(1.f);
+          module->params[Waveshaper::HARM2_PARAM].setValue(0.3f);
+          module->params[Waveshaper::HARM3_PARAM].setValue(0.1f);
+          module->params[Waveshaper::HARM4_PARAM].setValue(0.f);
+          break;
+        case 2: // Hard Distortion
+          module->params[Waveshaper::INPUT_GAIN_PARAM].setValue(2.f);
+          module->params[Waveshaper::OUTPUT_GAIN_PARAM].setValue(0.6f);
+          module->params[Waveshaper::ORDER_PARAM].setValue(4.f);
+          module->params[Waveshaper::SOFTCLIP_PARAM].setValue(0.f);
+          module->params[Waveshaper::HARM1_PARAM].setValue(0.8f);
+          module->params[Waveshaper::HARM2_PARAM].setValue(0.6f);
+          module->params[Waveshaper::HARM3_PARAM].setValue(0.4f);
+          module->params[Waveshaper::HARM4_PARAM].setValue(0.2f);
+          break;
+        case 3: // Fuzz
+          module->params[Waveshaper::INPUT_GAIN_PARAM].setValue(2.f);
+          module->params[Waveshaper::OUTPUT_GAIN_PARAM].setValue(0.7f);
+          module->params[Waveshaper::ORDER_PARAM].setValue(4.f);
+          module->params[Waveshaper::SOFTCLIP_PARAM].setValue(0.f);
+          module->params[Waveshaper::HARM1_PARAM].setValue(0.5f);
+          module->params[Waveshaper::HARM2_PARAM].setValue(1.f);
+          module->params[Waveshaper::HARM3_PARAM].setValue(0.8f);
+          module->params[Waveshaper::HARM4_PARAM].setValue(0.6f);
+          break;
+        case 4: // Subtle Warmth
+          module->params[Waveshaper::INPUT_GAIN_PARAM].setValue(1.2f);
+          module->params[Waveshaper::OUTPUT_GAIN_PARAM].setValue(0.9f);
+          module->params[Waveshaper::ORDER_PARAM].setValue(2.f);
+          module->params[Waveshaper::SOFTCLIP_PARAM].setValue(1.f);
+          module->params[Waveshaper::HARM1_PARAM].setValue(1.f);
+          module->params[Waveshaper::HARM2_PARAM].setValue(0.15f);
+          module->params[Waveshaper::HARM3_PARAM].setValue(0.f);
+          module->params[Waveshaper::HARM4_PARAM].setValue(0.f);
+          break;
+        case 5: // Octave Up
+          module->params[Waveshaper::INPUT_GAIN_PARAM].setValue(1.f);
+          module->params[Waveshaper::OUTPUT_GAIN_PARAM].setValue(1.f);
+          module->params[Waveshaper::ORDER_PARAM].setValue(2.f);
+          module->params[Waveshaper::SOFTCLIP_PARAM].setValue(1.f);
+          module->params[Waveshaper::HARM1_PARAM].setValue(0.3f);
+          module->params[Waveshaper::HARM2_PARAM].setValue(1.f);
+          module->params[Waveshaper::HARM3_PARAM].setValue(0.f);
+          module->params[Waveshaper::HARM4_PARAM].setValue(0.f);
+          break;
+        }
+      }
+    };
+
+    menu->addChild(createMenuLabel("Presets"));
+
+    const char *presetNames[] = {
+        "Clean (Linear)",
+        "Soft Overdrive",
+        "Hard Distortion",
+        "Fuzz",
+        "Subtle Warmth",
+        "Octave Up"};
+
+    for (int i = 0; i < 6; ++i)
+    {
+      PresetItem *presetItem = createMenuItem<PresetItem>(presetNames[i]);
+      presetItem->module = module;
+      presetItem->preset = i;
+      menu->addChild(presetItem);
+    }
+  }
 };

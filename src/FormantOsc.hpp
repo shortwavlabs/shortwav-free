@@ -89,4 +89,80 @@ struct FormantOscWidget : ModuleWidget
     // Audio output
     addOutput(createOutput<PJ301MPort>(Vec(10, 350), module, FormantOsc::AUDIO_OUTPUT));
   }
+
+  void appendContextMenu(Menu *menu) override
+  {
+    FormantOsc *module = dynamic_cast<FormantOsc *>(this->module);
+
+    menu->addChild(new MenuEntry);
+    menu->addChild(createMenuLabel("Formant Oscillator"));
+
+    menu->addChild(new MenuEntry);
+
+    struct PresetItem : MenuItem
+    {
+      FormantOsc *module;
+      int preset;
+      void onAction(const event::Action &e) override
+      {
+        switch (preset)
+        {
+        case 0: // Vowel A (as in "father")
+          module->params[FormantOsc::CARRIER_FREQ_PARAM].setValue(220.f);
+          module->params[FormantOsc::FORMANT_FREQ_PARAM].setValue(800.f);
+          module->params[FormantOsc::FORMANT_WIDTH_PARAM].setValue(0.35f);
+          module->params[FormantOsc::OUTPUT_GAIN_PARAM].setValue(0.5f);
+          break;
+        case 1: // Vowel E (as in "see")
+          module->params[FormantOsc::CARRIER_FREQ_PARAM].setValue(220.f);
+          module->params[FormantOsc::FORMANT_FREQ_PARAM].setValue(2200.f);
+          module->params[FormantOsc::FORMANT_WIDTH_PARAM].setValue(0.25f);
+          module->params[FormantOsc::OUTPUT_GAIN_PARAM].setValue(0.5f);
+          break;
+        case 2: // Vowel I (as in "hit")
+          module->params[FormantOsc::CARRIER_FREQ_PARAM].setValue(220.f);
+          module->params[FormantOsc::FORMANT_FREQ_PARAM].setValue(2000.f);
+          module->params[FormantOsc::FORMANT_WIDTH_PARAM].setValue(0.3f);
+          module->params[FormantOsc::OUTPUT_GAIN_PARAM].setValue(0.5f);
+          break;
+        case 3: // Vowel O (as in "go")
+          module->params[FormantOsc::CARRIER_FREQ_PARAM].setValue(220.f);
+          module->params[FormantOsc::FORMANT_FREQ_PARAM].setValue(600.f);
+          module->params[FormantOsc::FORMANT_WIDTH_PARAM].setValue(0.4f);
+          module->params[FormantOsc::OUTPUT_GAIN_PARAM].setValue(0.5f);
+          break;
+        case 4: // Vowel U (as in "boot")
+          module->params[FormantOsc::CARRIER_FREQ_PARAM].setValue(220.f);
+          module->params[FormantOsc::FORMANT_FREQ_PARAM].setValue(400.f);
+          module->params[FormantOsc::FORMANT_WIDTH_PARAM].setValue(0.45f);
+          module->params[FormantOsc::OUTPUT_GAIN_PARAM].setValue(0.5f);
+          break;
+        case 5: // Nasal
+          module->params[FormantOsc::CARRIER_FREQ_PARAM].setValue(220.f);
+          module->params[FormantOsc::FORMANT_FREQ_PARAM].setValue(1500.f);
+          module->params[FormantOsc::FORMANT_WIDTH_PARAM].setValue(0.15f);
+          module->params[FormantOsc::OUTPUT_GAIN_PARAM].setValue(0.5f);
+          break;
+        }
+      }
+    };
+
+    menu->addChild(createMenuLabel("Presets"));
+
+    const char *presetNames[] = {
+        "Vowel A (father)",
+        "Vowel E (see)",
+        "Vowel I (hit)",
+        "Vowel O (go)",
+        "Vowel U (boot)",
+        "Nasal"};
+
+    for (int i = 0; i < 6; ++i)
+    {
+      PresetItem *presetItem = createMenuItem<PresetItem>(presetNames[i]);
+      presetItem->module = module;
+      presetItem->preset = i;
+      menu->addChild(presetItem);
+    }
+  }
 };

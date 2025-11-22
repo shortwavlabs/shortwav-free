@@ -135,6 +135,70 @@ struct DriftWidget : ModuleWidget
         module,
         Drift::OUT_OUTPUT));
   }
+
+  void appendContextMenu(Menu *menu) override
+  {
+    Drift *module = dynamic_cast<Drift *>(this->module);
+
+    menu->addChild(new MenuEntry);
+    menu->addChild(createMenuLabel("Drift"));
+
+    menu->addChild(new MenuEntry);
+
+    struct PresetItem : MenuItem
+    {
+      Drift *module;
+      int preset;
+      void onAction(const event::Action &e) override
+      {
+        switch (preset)
+        {
+        case 0: // Subtle Analog
+          module->params[Drift::DEPTH_PARAM].setValue(2.f);
+          module->params[Drift::RATE_PARAM].setValue(0.1f);
+          break;
+        case 1: // Classic Tape
+          module->params[Drift::DEPTH_PARAM].setValue(3.5f);
+          module->params[Drift::RATE_PARAM].setValue(0.25f);
+          break;
+        case 2: // Vintage Synth
+          module->params[Drift::DEPTH_PARAM].setValue(4.5f);
+          module->params[Drift::RATE_PARAM].setValue(0.5f);
+          break;
+        case 3: // Warped
+          module->params[Drift::DEPTH_PARAM].setValue(7.f);
+          module->params[Drift::RATE_PARAM].setValue(1.f);
+          break;
+        case 4: // Lo-Fi
+          module->params[Drift::DEPTH_PARAM].setValue(8.5f);
+          module->params[Drift::RATE_PARAM].setValue(1.5f);
+          break;
+        case 5: // Extreme Wobble
+          module->params[Drift::DEPTH_PARAM].setValue(10.f);
+          module->params[Drift::RATE_PARAM].setValue(2.f);
+          break;
+        }
+      }
+    };
+
+    menu->addChild(createMenuLabel("Presets"));
+
+    const char *presetNames[] = {
+        "Subtle Analog",
+        "Classic Tape",
+        "Vintage Synth",
+        "Warped",
+        "Lo-Fi",
+        "Extreme Wobble"};
+
+    for (int i = 0; i < 6; ++i)
+    {
+      PresetItem *presetItem = createMenuItem<PresetItem>(presetNames[i]);
+      presetItem->module = module;
+      presetItem->preset = i;
+      menu->addChild(presetItem);
+    }
+  }
 };
 
 // Model declaration for registration in plugin.cpp.

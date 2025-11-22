@@ -81,4 +81,80 @@ struct RandomLfoWidget : ModuleWidget
 
     addOutput(createOutput<PJ301MPort>(Vec(10, 220), module, RandomLfo::LFO_OUTPUT));
   }
+
+  void appendContextMenu(Menu *menu) override
+  {
+    RandomLfo *module = dynamic_cast<RandomLfo *>(this->module);
+
+    menu->addChild(new MenuEntry);
+    menu->addChild(createMenuLabel("Random LFO"));
+
+    menu->addChild(new MenuEntry);
+
+    struct PresetItem : MenuItem
+    {
+      RandomLfo *module;
+      int preset;
+      void onAction(const event::Action &e) override
+      {
+        switch (preset)
+        {
+        case 0: // Slow & Smooth
+          module->params[RandomLfo::RATE_PARAM].setValue(0.25f);
+          module->params[RandomLfo::DEPTH_PARAM].setValue(1.f);
+          module->params[RandomLfo::SMOOTH_PARAM].setValue(0.9f);
+          module->params[RandomLfo::BIPOLAR_PARAM].setValue(1.f);
+          break;
+        case 1: // Sample & Hold
+          module->params[RandomLfo::RATE_PARAM].setValue(2.f);
+          module->params[RandomLfo::DEPTH_PARAM].setValue(1.f);
+          module->params[RandomLfo::SMOOTH_PARAM].setValue(0.f);
+          module->params[RandomLfo::BIPOLAR_PARAM].setValue(1.f);
+          break;
+        case 2: // Smooth Random
+          module->params[RandomLfo::RATE_PARAM].setValue(1.f);
+          module->params[RandomLfo::DEPTH_PARAM].setValue(1.f);
+          module->params[RandomLfo::SMOOTH_PARAM].setValue(0.75f);
+          module->params[RandomLfo::BIPOLAR_PARAM].setValue(1.f);
+          break;
+        case 3: // Fast Wobble
+          module->params[RandomLfo::RATE_PARAM].setValue(5.f);
+          module->params[RandomLfo::DEPTH_PARAM].setValue(0.7f);
+          module->params[RandomLfo::SMOOTH_PARAM].setValue(0.5f);
+          module->params[RandomLfo::BIPOLAR_PARAM].setValue(1.f);
+          break;
+        case 4: // Unipolar Smooth
+          module->params[RandomLfo::RATE_PARAM].setValue(0.5f);
+          module->params[RandomLfo::DEPTH_PARAM].setValue(1.f);
+          module->params[RandomLfo::SMOOTH_PARAM].setValue(0.8f);
+          module->params[RandomLfo::BIPOLAR_PARAM].setValue(0.f);
+          break;
+        case 5: // Glitchy
+          module->params[RandomLfo::RATE_PARAM].setValue(10.f);
+          module->params[RandomLfo::DEPTH_PARAM].setValue(1.f);
+          module->params[RandomLfo::SMOOTH_PARAM].setValue(0.1f);
+          module->params[RandomLfo::BIPOLAR_PARAM].setValue(1.f);
+          break;
+        }
+      }
+    };
+
+    menu->addChild(createMenuLabel("Presets"));
+
+    const char *presetNames[] = {
+        "Slow & Smooth",
+        "Sample & Hold",
+        "Smooth Random",
+        "Fast Wobble",
+        "Unipolar Smooth",
+        "Glitchy"};
+
+    for (int i = 0; i < 6; ++i)
+    {
+      PresetItem *presetItem = createMenuItem<PresetItem>(presetNames[i]);
+      presetItem->module = module;
+      presetItem->preset = i;
+      menu->addChild(presetItem);
+    }
+  }
 };
