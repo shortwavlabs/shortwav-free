@@ -43,6 +43,17 @@
         "Oscillator",
         "Synth voice"
       ]
+    },
+    {
+      "slug": "ThreeBandEQ",
+      "name": "3-Band EQ",
+      "description": "High-quality 3-band equalizer with adjustable crossover frequencies and gain control",
+      "tags": [
+        "Equalizer",
+        "Filter",
+        "Mixer",
+        "Utility"
+      ]
     }
   ]
 }

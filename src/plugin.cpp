@@ -10,4 +10,5 @@ void init(Plugin *p) {
 	p->addModel(modelWaveshaper);
 	p->addModel(modelDrift);
 	p->addModel(modelFormantOsc);
+	p->addModel(modelThreeBandEQ);
 }

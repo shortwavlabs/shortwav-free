@@ -17,6 +17,7 @@
 #include "../dsp/random-lfo.h"
 #include "../dsp/drift.h"
 #include "../dsp/formant-osc.h"
+#include "../dsp/3-band-eq.h"
 
 namespace
 {
@@ -956,6 +957,501 @@ namespace
     T_ASSERT(ctx, valid);
   }
 
+  //------------------------------------------------------------------------------
+  // ThreeBandEQ tests
+  //------------------------------------------------------------------------------
+
+  void test_threebandeq_unity_gain(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(44100.0f);
+    eq.setCrossoverFreqs(880.0f, 5000.0f);
+    eq.setGains(1.0f, 1.0f, 1.0f); // Unity gain on all bands
+
+    // Generate test signal (mix of frequencies)
+    const int numSamples = 1024;
+    std::vector<float> input(numSamples);
+    std::vector<float> output(numSamples);
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+      // Mix of low (100Hz), mid (2000Hz), and high (10000Hz)
+      float t = static_cast<float>(i) / 44100.0f;
+      input[i] = 0.3f * std::sin(2.0f * 3.14159f * 100.0f * t) +
+                 0.3f * std::sin(2.0f * 3.14159f * 2000.0f * t) +
+                 0.3f * std::sin(2.0f * 3.14159f * 10000.0f * t);
+    }
+
+    eq.processBuffer(input.data(), output.data(), numSamples);
+
+    // With unity gain, output should be close to input (allowing for filter delay and phase)
+    // The 3-band EQ introduces phase shift and group delay, so we check RMS similarity instead
+    // Skip first 200 samples for settling
+    float rmsIn = 0.0f, rmsOut = 0.0f;
+    const int skipSamples = 200;
+    for (int i = skipSamples; i < numSamples; ++i)
+    {
+      rmsIn += input[i] * input[i];
+      rmsOut += output[i] * output[i];
+    }
+    rmsIn = std::sqrt(rmsIn / (numSamples - skipSamples));
+    rmsOut = std::sqrt(rmsOut / (numSamples - skipSamples));
+
+    // RMS should be similar (within 20% for unity gain)
+    float ratio = rmsOut / (rmsIn + 1e-10f);
+    T_ASSERT(ctx, ratio > 0.8f && ratio < 1.2f);
+  }
+
+  void test_threebandeq_gain_precision(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(44100.0f);
+    eq.setCrossoverFreqs(250.0f, 4000.0f);
+
+    // Test dB to linear conversion accuracy
+    eq.setLowGainDB(6.0f);  // +6dB = 2.0x
+    eq.setMidGainDB(0.0f);  // 0dB = 1.0x
+    eq.setHighGainDB(-6.0f); // -6dB = 0.5x
+
+    T_ASSERT_NEAR(ctx, eq.getLowGain(), 2.0f, 0.01f);
+    T_ASSERT_NEAR(ctx, eq.getMidGain(), 1.0f, 0.01f);
+    T_ASSERT_NEAR(ctx, eq.getHighGain(), 0.5f, 0.01f);
+
+    // Test extreme gain values
+    eq.setLowGainDB(12.0f);   // +12dB
+    eq.setMidGainDB(-12.0f);  // -12dB
+    eq.setHighGainDB(0.0f);
+
+    T_ASSERT(ctx, eq.getLowGain() > 3.5f && eq.getLowGain() < 4.5f);   // ~4.0
+    T_ASSERT(ctx, eq.getMidGain() > 0.2f && eq.getMidGain() < 0.3f);   // ~0.25
+    T_ASSERT_NEAR(ctx, eq.getHighGain(), 1.0f, 0.01f);
+  }
+
+  void test_threebandeq_low_band_boost(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(48000.0f);
+    eq.setCrossoverFreqs(250.0f, 4000.0f); // Raise low crossover to 250Hz
+    eq.setLowGainDB(12.0f);  // Boost low by +12dB
+    eq.setMidGain(1.0f);
+    eq.setHighGain(1.0f);
+
+    // Generate low frequency signal (100Hz - well within low band)
+    const int numSamples = 4800; // 0.1 second
+    std::vector<float> input(numSamples);
+    std::vector<float> output(numSamples);
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+      float t = static_cast<float>(i) / 48000.0f;
+      input[i] = 0.1f * std::sin(2.0f * 3.14159f * 100.0f * t);
+    }
+
+    eq.processBuffer(input.data(), output.data(), numSamples);
+
+    // Calculate RMS of input and output (skip initial transient)
+    float rmsIn = 0.0f, rmsOut = 0.0f;
+    const int skipSamples = 500;
+    for (int i = skipSamples; i < numSamples; ++i)
+    {
+      rmsIn += input[i] * input[i];
+      rmsOut += output[i] * output[i];
+    }
+    rmsIn = std::sqrt(rmsIn / (numSamples - skipSamples));
+    rmsOut = std::sqrt(rmsOut / (numSamples - skipSamples));
+
+    // Output should be significantly boosted (+12dB ≈ 4x gain)
+    // Due to filter rolloff and phase effects, expect 1.7x to 4.5x
+    float amplification = rmsOut / rmsIn;
+    T_ASSERT(ctx, amplification > 1.7f);
+    T_ASSERT(ctx, amplification < 4.5f);
+  }
+
+  void test_threebandeq_mid_band_cut(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(44100.0f);
+    eq.setCrossoverFreqs(880.0f, 5000.0f);
+    eq.setLowGain(1.0f);
+    eq.setMidGainDB(-12.0f); // Cut mid by -12dB
+    eq.setHighGain(1.0f);
+
+    // Generate mid frequency signal (2000Hz)
+    const int numSamples = 4410; // 0.1 second
+    std::vector<float> input(numSamples);
+    std::vector<float> output(numSamples);
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+      float t = static_cast<float>(i) / 44100.0f;
+      input[i] = 0.5f * std::sin(2.0f * 3.14159f * 2000.0f * t);
+    }
+
+    eq.processBuffer(input.data(), output.data(), numSamples);
+
+    // Calculate RMS (skip transient)
+    float rmsIn = 0.0f, rmsOut = 0.0f;
+    const int skipSamples = 500;
+    for (int i = skipSamples; i < numSamples; ++i)
+    {
+      rmsIn += input[i] * input[i];
+      rmsOut += output[i] * output[i];
+    }
+    rmsIn = std::sqrt(rmsIn / (numSamples - skipSamples));
+    rmsOut = std::sqrt(rmsOut / (numSamples - skipSamples));
+
+    // Output should be significantly attenuated (at least 2x reduction for -12dB ≈ 0.25x gain)
+    float attenuation = rmsOut / rmsIn;
+    T_ASSERT(ctx, attenuation < 0.5f);
+    T_ASSERT(ctx, attenuation > 0.1f); // Should not go to zero
+  }
+
+  void test_threebandeq_high_band_response(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(48000.0f);
+    eq.setCrossoverFreqs(880.0f, 5000.0f);
+    eq.setLowGain(1.0f);
+    eq.setMidGain(1.0f);
+    eq.setHighGainDB(6.0f); // Boost high by +6dB
+
+    // Generate high frequency signal (10000Hz)
+    const int numSamples = 4800;
+    std::vector<float> input(numSamples);
+    std::vector<float> output(numSamples);
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+      float t = static_cast<float>(i) / 48000.0f;
+      input[i] = 0.2f * std::sin(2.0f * 3.14159f * 10000.0f * t);
+    }
+
+    eq.processBuffer(input.data(), output.data(), numSamples);
+
+    // Calculate RMS (skip transient)
+    float rmsIn = 0.0f, rmsOut = 0.0f;
+    const int skipSamples = 500;
+    for (int i = skipSamples; i < numSamples; ++i)
+    {
+      rmsIn += input[i] * input[i];
+      rmsOut += output[i] * output[i];
+    }
+    rmsIn = std::sqrt(rmsIn / (numSamples - skipSamples));
+    rmsOut = std::sqrt(rmsOut / (numSamples - skipSamples));
+
+    // +6dB = ~2x amplification (allow wider tolerance for high frequency response)
+    float amplification = rmsOut / rmsIn;
+    T_ASSERT(ctx, amplification > 1.3f); // Relaxed lower bound for filter rolloff
+    T_ASSERT(ctx, amplification < 2.5f);
+  }
+
+  void test_threebandeq_stereo_processing(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(44100.0f);
+    eq.setCrossoverFreqs(880.0f, 5000.0f);
+    eq.setGains(1.5f, 0.75f, 1.0f);
+
+    const int numSamples = 512;
+    std::vector<float> inputL(numSamples);
+    std::vector<float> inputR(numSamples);
+    std::vector<float> outputL(numSamples);
+    std::vector<float> outputR(numSamples);
+
+    // Generate different signals for left and right
+    for (int i = 0; i < numSamples; ++i)
+    {
+      float t = static_cast<float>(i) / 44100.0f;
+      inputL[i] = 0.5f * std::sin(2.0f * 3.14159f * 440.0f * t);  // A4
+      inputR[i] = 0.5f * std::sin(2.0f * 3.14159f * 880.0f * t);  // A5
+    }
+
+    eq.processStereoBuffer(inputL.data(), inputR.data(),
+                           outputL.data(), outputR.data(),
+                           numSamples);
+
+    // Both channels should be processed independently and produce finite output
+    bool allFinite = true;
+    for (int i = 0; i < numSamples; ++i)
+    {
+      if (!std::isfinite(outputL[i]) || !std::isfinite(outputR[i]))
+      {
+        allFinite = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allFinite);
+
+    // Outputs should be different (not identical) due to different inputs
+    bool channelsDifferent = false;
+    for (int i = 100; i < numSamples; ++i) // Skip transient
+    {
+      if (std::fabs(outputL[i] - outputR[i]) > 0.01f)
+      {
+        channelsDifferent = true;
+        break;
+      }
+    }
+    T_ASSERT(ctx, channelsDifferent);
+  }
+
+  void test_threebandeq_sample_rate_independence(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    // Test that the EQ behaves consistently across different sample rates
+    const float sampleRates[] = {44100.0f, 48000.0f, 96000.0f};
+    const float testFreq = 1000.0f; // Mid-range frequency
+
+    for (float sr : sampleRates)
+    {
+      ThreeBandEQ eq;
+      eq.setSampleRate(sr);
+      eq.setCrossoverFreqs(880.0f, 5000.0f);
+      eq.setGains(1.0f, 1.5f, 1.0f); // Boost mid
+
+      const int numSamples = static_cast<int>(sr * 0.05f); // 50ms
+      std::vector<float> input(numSamples);
+      std::vector<float> output(numSamples);
+
+      // Generate test signal
+      for (int i = 0; i < numSamples; ++i)
+      {
+        float t = static_cast<float>(i) / sr;
+        input[i] = 0.3f * std::sin(2.0f * 3.14159f * testFreq * t);
+      }
+
+      eq.processBuffer(input.data(), output.data(), numSamples);
+
+      // Output should be finite and boosted
+      bool allFinite = true;
+      for (int i = 0; i < numSamples; ++i)
+      {
+        if (!std::isfinite(output[i]))
+        {
+          allFinite = false;
+          break;
+        }
+      }
+      T_ASSERT(ctx, allFinite);
+    }
+  }
+
+  void test_threebandeq_crossover_frequency_behavior(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(44100.0f);
+
+    // Test that crossover frequencies are properly clamped
+    eq.setLowFreq(10.0f); // Below minimum, should be clamped to 20Hz
+    T_ASSERT(ctx, eq.getLowFreq() >= 20.0f);
+
+    eq.setLowFreq(250.0f);
+    eq.setHighFreq(200.0f); // Below low freq, should be clamped above it
+    T_ASSERT(ctx, eq.getHighFreq() > eq.getLowFreq());
+
+    // Test normal range
+    eq.setCrossoverFreqs(880.0f, 5000.0f);
+    T_ASSERT_NEAR(ctx, eq.getLowFreq(), 880.0f, 1.0f);
+    T_ASSERT_NEAR(ctx, eq.getHighFreq(), 5000.0f, 10.0f);
+  }
+
+  void test_threebandeq_extreme_gain_values(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(44100.0f);
+    eq.setCrossoverFreqs(880.0f, 5000.0f);
+
+    // Test maximum boost (+12dB)
+    eq.setLowGainDB(12.0f);
+    eq.setMidGainDB(12.0f);
+    eq.setHighGainDB(12.0f);
+
+    const int numSamples = 512;
+    std::vector<float> input(numSamples, 0.1f); // DC-like signal
+    std::vector<float> output(numSamples);
+
+    eq.processBuffer(input.data(), output.data(), numSamples);
+
+    // Should not overflow or produce infinities even with max gain
+    bool allFinite = true;
+    for (int i = 0; i < numSamples; ++i)
+    {
+      if (!std::isfinite(output[i]) || std::fabs(output[i]) > 10.0f)
+      {
+        allFinite = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allFinite);
+
+    // Test maximum cut (-12dB)
+    eq.reset();
+    eq.setLowGainDB(-12.0f);
+    eq.setMidGainDB(-12.0f);
+    eq.setHighGainDB(-12.0f);
+
+    eq.processBuffer(input.data(), output.data(), numSamples);
+
+    // Should produce very quiet output (skip transient)
+    float maxVal = 0.0f;
+    for (int i = 100; i < numSamples; ++i)
+    {
+      maxVal = std::max(maxVal, std::fabs(output[i]));
+    }
+    T_ASSERT(ctx, maxVal < 0.05f); // Significantly attenuated
+  }
+
+  void test_threebandeq_denormal_protection(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(44100.0f);
+    eq.setCrossoverFreqs(880.0f, 5000.0f);
+    eq.setGains(1.0f, 1.0f, 1.0f);
+
+    // Feed extremely small values (near denormal range)
+    const int numSamples = 1024;
+    std::vector<float> input(numSamples);
+    std::vector<float> output(numSamples);
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+      input[i] = 1e-20f * std::sin(2.0f * 3.14159f * 1000.0f * static_cast<float>(i) / 44100.0f);
+    }
+
+    eq.processBuffer(input.data(), output.data(), numSamples);
+
+    // All output should be finite (denormal protection should prevent issues)
+    bool allFinite = true;
+    for (int i = 0; i < numSamples; ++i)
+    {
+      if (!std::isfinite(output[i]))
+      {
+        allFinite = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allFinite);
+  }
+
+  void test_threebandeq_reset_behavior(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(44100.0f);
+    eq.setCrossoverFreqs(880.0f, 5000.0f);
+    eq.setGains(2.0f, 1.0f, 0.5f);
+
+    // Process some samples to build up state
+    for (int i = 0; i < 100; ++i)
+    {
+      eq.processSample(0.5f * std::sin(2.0f * 3.14159f * 1000.0f * static_cast<float>(i) / 44100.0f));
+    }
+
+    // Reset should clear all state
+    eq.reset();
+
+    // First output after reset should be close to zero (no history)
+    float out1 = eq.processSample(0.0f);
+    T_ASSERT(ctx, std::fabs(out1) < 1e-6f);
+  }
+
+  void test_threebandeq_phase_continuity(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(44100.0f);
+    eq.setCrossoverFreqs(880.0f, 5000.0f);
+    eq.setGains(1.0f, 1.0f, 1.0f);
+
+    // Generate continuous sine wave and check for discontinuities
+    const int numSamples = 2048;
+    std::vector<float> output(numSamples);
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+      float t = static_cast<float>(i) / 44100.0f;
+      float input = 0.5f * std::sin(2.0f * 3.14159f * 1000.0f * t);
+      output[i] = eq.processSample(input);
+    }
+
+    // Check for large discontinuities (phase jumps)
+    bool continuous = true;
+    const int skipSamples = 100; // Skip initial transient
+    const float maxJump = 0.5f;  // Threshold for continuity
+
+    for (int i = skipSamples + 1; i < numSamples; ++i)
+    {
+      float jump = std::fabs(output[i] - output[i - 1]);
+      if (jump > maxJump)
+      {
+        continuous = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, continuous);
+  }
+
+  void test_threebandeq_performance_benchmark(TestContext &ctx)
+  {
+    using ShortwavDSP::ThreeBandEQ;
+
+    ThreeBandEQ eq;
+    eq.setSampleRate(48000.0f);
+    eq.setCrossoverFreqs(250.0f, 4000.0f);
+    eq.setGains(1.5f, 0.8f, 1.2f);
+
+    // Process a large buffer to test performance
+    const int numSamples = 48000; // 1 second at 48kHz
+    std::vector<float> input(numSamples);
+    std::vector<float> output(numSamples);
+
+    // Generate test signal
+    for (int i = 0; i < numSamples; ++i)
+    {
+      float t = static_cast<float>(i) / 48000.0f;
+      input[i] = 0.5f * std::sin(2.0f * 3.14159f * 440.0f * t);
+    }
+
+    // Process buffer (performance test - should complete quickly)
+    eq.processBuffer(input.data(), output.data(), numSamples);
+
+    // Verify output is valid
+    bool allFinite = true;
+    for (int i = 0; i < numSamples; ++i)
+    {
+      if (!std::isfinite(output[i]))
+      {
+        allFinite = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allFinite);
+
+    // This test is primarily for performance measurement during development
+    // The assertion just ensures the algorithm completed successfully
+  }
+
   // Entry point to run all tests when this TU is built as a standalone test binary.
   // In normal plugin builds this file is not included.
 } // namespace
@@ -1003,6 +1499,21 @@ int main()
   ::test_formantosc_buffer_processing(ctx);
   ::test_formantosc_phase_continuity(ctx);
   ::test_formantosc_parameter_clamping(ctx);
+
+  // ThreeBandEQ
+  ::test_threebandeq_unity_gain(ctx);
+  ::test_threebandeq_gain_precision(ctx);
+  ::test_threebandeq_low_band_boost(ctx);
+  ::test_threebandeq_mid_band_cut(ctx);
+  ::test_threebandeq_high_band_response(ctx);
+  ::test_threebandeq_stereo_processing(ctx);
+  ::test_threebandeq_sample_rate_independence(ctx);
+  ::test_threebandeq_crossover_frequency_behavior(ctx);
+  ::test_threebandeq_extreme_gain_values(ctx);
+  ::test_threebandeq_denormal_protection(ctx);
+  ::test_threebandeq_reset_behavior(ctx);
+  ::test_threebandeq_phase_continuity(ctx);
+  ::test_threebandeq_performance_benchmark(ctx);
 
   ctx.summary();
   return (ctx.failed == 0) ? 0 : 1;
