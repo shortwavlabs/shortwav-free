@@ -113,7 +113,7 @@ struct ThreeBandEQWidget : ModuleWidget
   ThreeBandEQWidget(ThreeBandEQ *module)
   {
     setModule(module);
-    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/28HP_BLANK.svg")));
+    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/22HP_BLANK.svg")));
 
     addChild(createWidget<ScrewSilver>(Vec(0, 0)));
     addChild(createWidget<ScrewSilver>(Vec(box.size.x - 1 * RACK_GRID_WIDTH, 0)));
@@ -122,7 +122,7 @@ struct ThreeBandEQWidget : ModuleWidget
 
     // Frequency Response Display (top visualization)
     EQFrequencyResponseDisplay *freqDisplay = new EQFrequencyResponseDisplay();
-    freqDisplay->box.pos = Vec(85, 20);
+    freqDisplay->box.pos = Vec(20, 20);
     freqDisplay->box.size = Vec(200, 80);
     freqDisplay->module = module;
     addChild(freqDisplay);
@@ -135,32 +135,33 @@ struct ThreeBandEQWidget : ModuleWidget
     // addChild(gainDisplay);
 
     // Crossover frequency knobs
-    addParam(createParam<RoundLargeBlackKnob>(Vec(33, 20), module, ThreeBandEQ::LOW_FREQ_PARAM));
-    addParam(createParam<RoundLargeBlackKnob>(Vec(33, 80), module, ThreeBandEQ::HIGH_FREQ_PARAM));
+    addParam(createParam<RoundLargeBlackKnob>(Vec(25, 210), module, ThreeBandEQ::LOW_FREQ_PARAM));
+    addParam(createParam<RoundLargeBlackKnob>(Vec(75, 210), module, ThreeBandEQ::HIGH_FREQ_PARAM));
 
     // Gain knobs (Low, Mid, High)
-    addParam(createParam<RoundLargeBlackKnob>(Vec(33, 150), module, ThreeBandEQ::LOW_GAIN_PARAM));
-    addParam(createParam<RoundLargeBlackKnob>(Vec(33, 200), module, ThreeBandEQ::MID_GAIN_PARAM));
-    addParam(createParam<RoundLargeBlackKnob>(Vec(33, 250), module, ThreeBandEQ::HIGH_GAIN_PARAM));
+    addParam(createParam<RoundLargeBlackKnob>(Vec(25, 125), module, ThreeBandEQ::LOW_GAIN_PARAM));
+    addParam(createParam<RoundLargeBlackKnob>(Vec(75, 125), module, ThreeBandEQ::MID_GAIN_PARAM));
+    addParam(createParam<RoundLargeBlackKnob>(Vec(125, 125), module, ThreeBandEQ::HIGH_GAIN_PARAM));
 
     // Bypass button
-    addParam(createParam<CKSS>(Vec(45, 300), module, ThreeBandEQ::BYPASS_PARAM));
-    addChild(createLight<MediumLight<RedLight>>(Vec(50, 315), module, ThreeBandEQ::BYPASS_LIGHT));
+    addParam(createParam<CKSS>(Vec(185, 125), module, ThreeBandEQ::BYPASS_PARAM));
+    addChild(createLight<MediumLight<RedLight>>(Vec(190, 155), module, ThreeBandEQ::BYPASS_LIGHT));
 
     // CV inputs (left column)
-    addInput(createInput<PJ301MPort>(Vec(8, 35), module, ThreeBandEQ::LOW_FREQ_CV_INPUT));
-    addInput(createInput<PJ301MPort>(Vec(8, 95), module, ThreeBandEQ::HIGH_FREQ_CV_INPUT));
-    addInput(createInput<PJ301MPort>(Vec(8, 165), module, ThreeBandEQ::LOW_GAIN_CV_INPUT));
-    addInput(createInput<PJ301MPort>(Vec(8, 215), module, ThreeBandEQ::MID_GAIN_CV_INPUT));
-    addInput(createInput<PJ301MPort>(Vec(8, 265), module, ThreeBandEQ::HIGH_GAIN_CV_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(30, 260), module, ThreeBandEQ::LOW_FREQ_CV_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(80, 260), module, ThreeBandEQ::HIGH_FREQ_CV_INPUT));
+
+    addInput(createInput<PJ301MPort>(Vec(30, 170), module, ThreeBandEQ::LOW_GAIN_CV_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(80, 170), module, ThreeBandEQ::MID_GAIN_CV_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(130, 170), module, ThreeBandEQ::HIGH_GAIN_CV_INPUT));
 
     // Audio inputs (bottom)
-    addInput(createInput<PJ301MPort>(Vec(10, 320), module, ThreeBandEQ::AUDIO_L_INPUT));
-    addInput(createInput<PJ301MPort>(Vec(45, 320), module, ThreeBandEQ::AUDIO_R_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(20, 300), module, ThreeBandEQ::AUDIO_L_INPUT));
+    addInput(createInput<PJ301MPort>(Vec(20, 335), module, ThreeBandEQ::AUDIO_R_INPUT));
 
     // Audio outputs (bottom)
-    addOutput(createOutput<PJ301MPort>(Vec(10, 350), module, ThreeBandEQ::AUDIO_L_OUTPUT));
-    addOutput(createOutput<PJ301MPort>(Vec(45, 350), module, ThreeBandEQ::AUDIO_R_OUTPUT));
+    addOutput(createOutput<PJ301MPort>(Vec(195, 300), module, ThreeBandEQ::AUDIO_L_OUTPUT));
+    addOutput(createOutput<PJ301MPort>(Vec(195, 335), module, ThreeBandEQ::AUDIO_R_OUTPUT));
   }
 
   void appendContextMenu(Menu *menu) override
