@@ -12,4 +12,5 @@ void init(Plugin *p) {
 	p->addModel(modelFormantOsc);
 	p->addModel(modelThreeBandEQ);
 	p->addModel(modelLowPassFilter);
+	p->addModel(modelWavPlayer);
 }

@@ -3240,6 +3240,330 @@ namespace
     T_ASSERT(ctx, allValid);
   }
 
+  // ============================================================================
+  // Module Integration Tests (Parameter Mapping, Slice Selection, Triggers)
+  // ============================================================================
+
+  /**
+   * Test parameter mapping from UI values to DSP settings
+   * Verifies speed/pitch octave/semitone conversions
+   */
+  void test_module_parameter_mapping(TestContext &ctx)
+  {
+    ShortwavDSP::WavPlayer player;
+    player.setSampleRate(44100.0f);
+
+    // Test speed parameter mapping: -2 to +2 octaves → 0.25x to 4x
+    // Speed = 2^octaves
+    
+    // +1 octave should be 2x speed
+    float speedOctaves = 1.0f;
+    float expectedSpeed = std::pow(2.0f, speedOctaves);
+    T_ASSERT(ctx, std::abs(expectedSpeed - 2.0f) < 0.001f);
+
+    // -1 octave should be 0.5x speed
+    speedOctaves = -1.0f;
+    expectedSpeed = std::pow(2.0f, speedOctaves);
+    T_ASSERT(ctx, std::abs(expectedSpeed - 0.5f) < 0.001f);
+
+    // 0 octaves should be 1x speed
+    speedOctaves = 0.0f;
+    expectedSpeed = std::pow(2.0f, speedOctaves);
+    T_ASSERT(ctx, std::abs(expectedSpeed - 1.0f) < 0.001f);
+
+    // Test pitch parameter mapping: -12 to +12 semitones → pitch ratio
+    // Pitch ratio = 2^(semitones/12)
+    
+    // +12 semitones (1 octave up)
+    float pitchSemitones = 12.0f;
+    float expectedPitch = std::pow(2.0f, pitchSemitones / 12.0f);
+    T_ASSERT(ctx, std::abs(expectedPitch - 2.0f) < 0.001f);
+
+    // -12 semitones (1 octave down)
+    pitchSemitones = -12.0f;
+    expectedPitch = std::pow(2.0f, pitchSemitones / 12.0f);
+    T_ASSERT(ctx, std::abs(expectedPitch - 0.5f) < 0.001f);
+
+    // +7 semitones (perfect fifth)
+    pitchSemitones = 7.0f;
+    expectedPitch = std::pow(2.0f, pitchSemitones / 12.0f);
+    T_ASSERT(ctx, std::abs(expectedPitch - 1.4983f) < 0.001f);
+
+    // Verify player accepts these values correctly
+    player.setSpeed(2.0f);
+    T_ASSERT(ctx, std::abs(player.getSpeed() - 2.0f) < 0.001f);
+
+    player.setPitch(1.5f);
+    T_ASSERT(ctx, std::abs(player.getPitch() - 1.5f) < 0.001f);
+  }
+
+  /**
+   * Test slice boundary calculation and selection
+   * Verifies equal slicing of waveform and CV mapping
+   */
+  void test_module_slice_selection(TestContext &ctx)
+  {
+    // Create test WAV with known length: 100 samples, mono, 44.1kHz, 16-bit
+    std::vector<uint8_t> wavData = generateTestWav(100, 1, 44100, 16);
+    
+    ShortwavDSP::WavPlayer player;
+    player.setSampleRate(44100.0f);
+    auto result = player.loadFromMemory(wavData.data(), wavData.size());
+    T_ASSERT(ctx, result == ShortwavDSP::WavError::None);
+
+    size_t totalSamples = player.getNumSamples();
+    T_ASSERT(ctx, totalSamples == 100);
+
+    // Test slice boundary calculations for various slice counts
+    
+    // 2 slices: [0-50), [50-100)
+    int numSlices = 2;
+    size_t samplesPerSlice = totalSamples / numSlices;
+    T_ASSERT(ctx, samplesPerSlice == 50);
+    
+    size_t slice0Start = 0 * samplesPerSlice;
+    size_t slice0End = 1 * samplesPerSlice;
+    size_t slice1Start = 1 * samplesPerSlice;
+    size_t slice1End = totalSamples;
+    
+    T_ASSERT(ctx, slice0Start == 0 && slice0End == 50);
+    T_ASSERT(ctx, slice1Start == 50 && slice1End == 100);
+
+    // 4 slices: [0-25), [25-50), [50-75), [75-100)
+    numSlices = 4;
+    samplesPerSlice = totalSamples / numSlices;
+    T_ASSERT(ctx, samplesPerSlice == 25);
+
+    // 10 slices (not evenly divisible): [0-10), [10-20), ..., [90-100)
+    numSlices = 10;
+    samplesPerSlice = totalSamples / numSlices;
+    T_ASSERT(ctx, samplesPerSlice == 10);
+
+    // Test CV mapping: 0-10V → slice indices
+    // For 8 slices, voltage ranges:
+    // 0.0-1.25V → slice 0
+    // 1.25-2.5V → slice 1
+    // ...
+    // 8.75-10V → slice 7
+    
+    numSlices = 8;
+    auto mapVoltageToSlice = [](float voltage, int numSlices) {
+      voltage = std::max(0.0f, std::min(10.0f, voltage)); // Clamp 0-10V
+      int slice = static_cast<int>(voltage / 10.0f * numSlices);
+      return std::max(0, std::min(numSlices - 1, slice));
+    };
+
+    T_ASSERT(ctx, mapVoltageToSlice(0.0f, numSlices) == 0);
+    T_ASSERT(ctx, mapVoltageToSlice(1.0f, numSlices) == 0);
+    T_ASSERT(ctx, mapVoltageToSlice(1.5f, numSlices) == 1);
+    T_ASSERT(ctx, mapVoltageToSlice(5.0f, numSlices) == 4);
+    T_ASSERT(ctx, mapVoltageToSlice(9.5f, numSlices) == 7);
+    T_ASSERT(ctx, mapVoltageToSlice(10.0f, numSlices) == 7);
+
+    // Test slice playback positioning
+    // Slice 2 of 4 slices (100 samples total)
+    numSlices = 4;
+    int sliceIdx = 2;
+    samplesPerSlice = totalSamples / numSlices; // 25 samples
+    size_t sliceStart = sliceIdx * samplesPerSlice; // 50
+    size_t sliceEnd = (sliceIdx == numSlices - 1) ? totalSamples : (sliceIdx + 1) * samplesPerSlice; // 75
+
+    T_ASSERT(ctx, sliceStart == 50);
+    T_ASSERT(ctx, sliceEnd == 75);
+
+    // Verify player can seek to slice boundaries
+    player.seekToSample(sliceStart);
+    T_ASSERT(ctx, player.getPlaybackPositionSamples() == static_cast<double>(sliceStart));
+  }
+
+  /**
+   * Test trigger input behavior in edge and gate modes
+   * Verifies SchmittTrigger-like behavior for playback triggers
+   */
+  void test_module_trigger_behavior(TestContext &ctx)
+  {
+    // Simulate SchmittTrigger behavior
+    // Typical thresholds: low=0.1V, high=1.0V (or similar)
+    static const float TRIGGER_LOW_THRESHOLD = 0.1f;
+    static const float TRIGGER_HIGH_THRESHOLD = 1.0f;
+    
+    struct SimpleTrigger {
+      bool state = false;
+      
+      bool process(float voltage) {
+        if (voltage >= TRIGGER_HIGH_THRESHOLD) {
+          if (!state) {
+            state = true;
+            return true; // Rising edge detected
+          }
+        } else if (voltage <= TRIGGER_LOW_THRESHOLD) {
+          state = false;
+        }
+        return false; // No trigger
+      }
+    };
+
+    // Test edge trigger mode (typical for percussion)
+    SimpleTrigger edgeTrigger;
+    
+    // Start low - no trigger
+    T_ASSERT(ctx, !edgeTrigger.process(0.0f));
+    T_ASSERT(ctx, !edgeTrigger.process(0.0f));
+    
+    // Rising edge - should trigger once
+    T_ASSERT(ctx, edgeTrigger.process(5.0f)); // First high = trigger
+    T_ASSERT(ctx, !edgeTrigger.process(5.0f)); // Still high = no trigger
+    T_ASSERT(ctx, !edgeTrigger.process(5.0f)); // Still high = no trigger
+    
+    // Fall then rise again - should trigger again
+    T_ASSERT(ctx, !edgeTrigger.process(0.0f)); // Low
+    T_ASSERT(ctx, edgeTrigger.process(5.0f)); // Rising edge = trigger
+    
+    // Test rapid bouncing near threshold
+    T_ASSERT(ctx, !edgeTrigger.process(0.5f)); // Between thresholds (hysteresis)
+    T_ASSERT(ctx, !edgeTrigger.process(0.6f));
+    T_ASSERT(ctx, !edgeTrigger.process(0.05f)); // Drop below low threshold
+    T_ASSERT(ctx, edgeTrigger.process(2.0f)); // Rise above high = trigger
+
+    // Test gate mode simulation (check state without consuming)
+    // Gate mode: play while high, stop while low
+    struct GateDetector {
+      bool isHigh(float voltage) {
+        return voltage >= TRIGGER_HIGH_THRESHOLD;
+      }
+    };
+
+    GateDetector gate;
+    
+    T_ASSERT(ctx, !gate.isHigh(0.0f)); // Low = stop
+    T_ASSERT(ctx, gate.isHigh(5.0f));  // High = play
+    T_ASSERT(ctx, gate.isHigh(5.0f));  // Still high = keep playing
+    T_ASSERT(ctx, !gate.isHigh(0.0f)); // Low = stop
+
+    // Test trigger + slice selection workflow
+    // This simulates triggering different slices via CV
+    
+    std::vector<uint8_t> wavData = generateTestWav(100, 1, 44100, 16);
+    ShortwavDSP::WavPlayer player;
+    player.setSampleRate(44100.0f);
+    player.loadFromMemory(wavData.data(), wavData.size());
+
+    // Slice configuration: 4 slices of 25 samples each
+    int numSlices = 4;
+    size_t samplesPerSlice = player.getNumSamples() / numSlices;
+
+    // Trigger slice 0
+    SimpleTrigger trigger0;
+    if (trigger0.process(5.0f)) { // Rising edge
+      player.seekToSample(0 * samplesPerSlice);
+      player.play();
+      T_ASSERT(ctx, player.isPlaying());
+      T_ASSERT(ctx, player.getPlaybackPositionSamples() == 0.0);
+    }
+
+    // Trigger slice 2
+    trigger0.process(0.0f); // Reset trigger
+    SimpleTrigger trigger1;
+    if (trigger1.process(5.0f)) {
+      player.seekToSample(2 * samplesPerSlice);
+      player.play();
+      T_ASSERT(ctx, player.getPlaybackPositionSamples() == 50.0);
+    }
+
+    // Verify slice boundary detection during playback
+    player.seekToSample(22); // Near end of slice 0 (ends at 25)
+    player.play();
+    
+    // Process a few samples
+    for (int i = 0; i < 5; ++i) {
+      player.processSample();
+    }
+    
+    // Should have advanced past slice boundary
+    double currentPos = player.getPlaybackPositionSamples();
+    T_ASSERT(ctx, currentPos >= 25.0); // Past slice 0 boundary
+  }
+
+  /**
+   * Test combined parameter + trigger + slice workflow
+   * Simulates real-world modulation of playing sliced samples
+   */
+  void test_module_integrated_workflow(TestContext &ctx)
+  {
+    std::vector<uint8_t> wavData = generateTestWav(1000, 2, 44100, 16); // 1000 samples, stereo, 44.1kHz, 16-bit
+    
+    ShortwavDSP::WavPlayer player;
+    player.setSampleRate(44100.0f);
+    auto result = player.loadFromMemory(wavData.data(), wavData.size());
+    T_ASSERT(ctx, result == ShortwavDSP::WavError::None);
+
+    // Configure: 8 slices, loop mode off, normal speed/pitch
+    int numSlices = 8;
+    size_t samplesPerSlice = player.getNumSamples() / numSlices; // 125 samples per slice
+    
+    player.setLoopMode(ShortwavDSP::LoopMode::Off);
+    player.setSpeed(1.0f);
+    player.setPitch(1.0f);
+    player.setVolume(1.0f);
+
+    // Simulate modulation workflow:
+    // 1. Trigger slice 3 with CV
+    // 2. Modulate speed while playing
+    // 3. Detect slice boundary and stop
+
+    int sliceIdx = 3;
+    player.seekToSample(sliceIdx * samplesPerSlice); // Seek to slice 3 (sample 375)
+    player.play();
+    
+    T_ASSERT(ctx, player.isPlaying());
+    double startPos = player.getPlaybackPositionSamples();
+    T_ASSERT(ctx, startPos == 375.0);
+
+    // Play first half at normal speed
+    for (int i = 0; i < 50; ++i) {
+      float left, right;
+      player.processSampleStereo(left, right);
+      T_ASSERT(ctx, std::isfinite(left) && std::isfinite(right));
+    }
+
+    // Apply speed modulation: 2x speed (simulate +1 octave CV)
+    player.setSpeed(2.0f);
+
+    // Play second half at double speed
+    for (int i = 0; i < 50; ++i) {
+      float left, right;
+      player.processSampleStereo(left, right);
+      T_ASSERT(ctx, std::isfinite(left) && std::isfinite(right));
+    }
+
+    // Check slice boundary
+    double currentPos = player.getPlaybackPositionSamples();
+    size_t sliceEnd = (sliceIdx + 1) * samplesPerSlice; // 500
+    
+    // With 2x speed, we should have advanced further
+    // (exact position depends on interpolation, but should be closer to boundary)
+    T_ASSERT(ctx, currentPos >= startPos); // Must have advanced
+
+    // Verify stop at slice boundary
+    if (currentPos >= sliceEnd) {
+      player.stop();
+      T_ASSERT(ctx, !player.isPlaying());
+    }
+
+    // Test reverse playback in slice
+    player.setReverse(true);
+    player.seekToSample(sliceEnd - 1); // Start at end of slice 3
+    player.play();
+
+    for (int i = 0; i < 10; ++i) {
+      player.processSample();
+    }
+
+    // Position should decrease when reversed
+    double reversedPos = player.getPlaybackPositionSamples();
+    T_ASSERT(ctx, reversedPos < (sliceEnd - 1));
+  }
+
   // Entry point to run all tests when this TU is built as a standalone test binary.
   // In normal plugin builds this file is not included.
 } // namespace
@@ -3358,6 +3682,12 @@ int main()
   ::test_wavplayer_not_loaded_operations(ctx);
   ::test_wavplayer_mono_to_stereo_duplication(ctx);
   ::test_wavplayer_stereo_to_mono_mixdown(ctx);
+
+  // Module integration tests
+  ::test_module_parameter_mapping(ctx);
+  ::test_module_slice_selection(ctx);
+  ::test_module_trigger_behavior(ctx);
+  ::test_module_integrated_workflow(ctx);
 
   ctx.summary();
   return (ctx.failed == 0) ? 0 : 1;

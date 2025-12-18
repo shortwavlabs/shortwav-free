@@ -11,6 +11,7 @@ extern Model *modelDrift;
 extern Model *modelFormantOsc;
 extern Model *modelThreeBandEQ;
 extern Model *modelLowPassFilter;
+extern Model *modelWavPlayer;
 
 // Declare each Model, defined in each module source file
 // extern Model *modelMyModule;

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated for ShortwavFree WavPlayer module -->
+<svg width="220" height="380" viewBox="0 0 220 380" xmlns="http://www.w3.org/2000/svg">
+    <g id="WavPlayer">
+        <!-- Background -->
+        <path id="Background" fill="#2a2a2a" fill-rule="evenodd" stroke="none" d="M 0 0 L 220 0 L 220 380 L 0 380 L 0 0 Z"/>
+        
+        <!-- Title Area -->
+        <rect x="10" y="10" width="200" height="15" fill="#1a1a1a" stroke="#505050" stroke-width="1"/>
+        <text x="110" y="20" font-family="Arial, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">WAV PLAYER</text>
+        
+        <!-- Waveform Display Area -->
+        <rect x="10" y="30" width="200" height="105" fill="#0a0a0a" stroke="#404040" stroke-width="2"/>
+        
+        <!-- Transport Section -->
+        <text x="32" y="145" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">PLAY</text>
+        <text x="67" y="145" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">STOP</text>
+        <text x="110" y="145" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">LOOP</text>
+        <text x="160" y="145" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">REVERSE</text>
+        
+        <!-- Row 2: Knobs -->
+        <text x="38" y="185" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">SPEED</text>
+        <text x="93" y="185" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">PITCH</text>
+        <text x="148" y="185" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">VOLUME</text>
+        
+        <!-- Row 3: CV Inputs -->
+        <text x="38" y="233" font-family="Arial, sans-serif" font-size="7" fill="#909090" text-anchor="middle">SPD CV</text>
+        <text x="93" y="233" font-family="Arial, sans-serif" font-size="7" fill="#909090" text-anchor="middle">PCH CV</text>
+        <text x="148" y="233" font-family="Arial, sans-serif" font-size="7" fill="#909090" text-anchor="middle">ZOOM</text>
+        
+        <!-- Row 4: Slice Knobs -->
+        <text x="38" y="275" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">SLICES</text>
+        <text x="93" y="275" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">SELECT</text>
+        
+        <!-- Row 5: Inputs and Switches -->
+        <text x="38" y="323" font-family="Arial, sans-serif" font-size="7" fill="#909090" text-anchor="middle">SLC CV</text>
+        <text x="93" y="323" font-family="Arial, sans-serif" font-size="7" fill="#909090" text-anchor="middle">TRIG</text>
+        <text x="145" y="323" font-family="Arial, sans-serif" font-size="7" fill="#909090" text-anchor="middle">MODE</text>
+        <text x="183" y="323" font-family="Arial, sans-serif" font-size="7" fill="#909090" text-anchor="middle">INTERP</text>
+        
+        <!-- Row 6: Outputs -->
+        <text x="38" y="360" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">OUT L</text>
+        <text x="93" y="360" font-family="Arial, sans-serif" font-size="8" fill="#c0c0c0" text-anchor="middle">OUT R</text>
+        
+        <!-- Section Dividers -->
+        <line x1="5" y1="170" x2="215" y2="170" stroke="#404040" stroke-width="0.5"/>
+        <line x1="5" y1="260" x2="215" y2="260" stroke="#404040" stroke-width="0.5"/>
+        <line x1="5" y1="348" x2="215" y2="348" stroke="#404040" stroke-width="0.5"/>
+    </g>
+</svg>

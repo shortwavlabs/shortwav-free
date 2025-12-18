@@ -63,6 +63,16 @@
         "Filter",
         "Low-pass gate"
       ]
+    },
+    {
+      "slug": "WavPlayer",
+      "name": "WAV Player",
+      "description": "Advanced WAV file player with slice manipulation, independent pitch/speed control, and real-time waveform visualization",
+      "tags": [
+        "Sampler",
+        "Granular",
+        "Utility"
+      ]
     }
   ]
 }
