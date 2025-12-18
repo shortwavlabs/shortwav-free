@@ -54,6 +54,15 @@
         "Mixer",
         "Utility"
       ]
+    },
+    {
+      "slug": "LowPassFilter",
+      "name": "Low-Pass Filter",
+      "description": "Moog-style 4-pole resonant low-pass filter with self-oscillation capabilities",
+      "tags": [
+        "Filter",
+        "Low-pass gate"
+      ]
     }
   ]
 }

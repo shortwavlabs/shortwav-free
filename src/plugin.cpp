@@ -11,4 +11,5 @@ void init(Plugin *p) {
 	p->addModel(modelDrift);
 	p->addModel(modelFormantOsc);
 	p->addModel(modelThreeBandEQ);
+	p->addModel(modelLowPassFilter);
 }
