@@ -19,6 +19,10 @@
 #include "../dsp/formant-osc.h"
 #include "../dsp/3-band-eq.h"
 #include "../dsp/low-pass.h"
+#include "../dsp/wav-player.h"
+#include <chrono>
+#include <thread>
+#include <cstdlib>
 
 namespace
 {
@@ -2079,6 +2083,1163 @@ namespace
     T_ASSERT(ctx, filter.isStateValid());
   }
 
+  //------------------------------------------------------------------------------
+  // WavPlayer tests
+  //------------------------------------------------------------------------------
+
+  // Helper to generate a valid WAV file in memory for testing
+  std::vector<uint8_t> generateTestWav(size_t numSamples, uint16_t channels = 1,
+                                        uint32_t sampleRate = 44100, uint16_t bitsPerSample = 16,
+                                        float frequency = 440.0f)
+  {
+    const size_t bytesPerSample = bitsPerSample / 8;
+    const size_t dataSize = numSamples * channels * bytesPerSample;
+    const size_t headerSize = 44; // Standard WAV header size
+    std::vector<uint8_t> wav(headerSize + dataSize);
+
+    // RIFF header
+    std::memcpy(wav.data(), "RIFF", 4);
+    uint32_t fileSize = static_cast<uint32_t>(wav.size() - 8);
+    std::memcpy(wav.data() + 4, &fileSize, 4);
+    std::memcpy(wav.data() + 8, "WAVE", 4);
+
+    // fmt chunk
+    std::memcpy(wav.data() + 12, "fmt ", 4);
+    uint32_t fmtSize = 16;
+    std::memcpy(wav.data() + 16, &fmtSize, 4);
+    uint16_t audioFormat = 1; // PCM
+    std::memcpy(wav.data() + 20, &audioFormat, 2);
+    std::memcpy(wav.data() + 22, &channels, 2);
+    std::memcpy(wav.data() + 24, &sampleRate, 4);
+    uint32_t byteRate = sampleRate * channels * bytesPerSample;
+    std::memcpy(wav.data() + 28, &byteRate, 4);
+    uint16_t blockAlign = static_cast<uint16_t>(channels * bytesPerSample);
+    std::memcpy(wav.data() + 32, &blockAlign, 2);
+    std::memcpy(wav.data() + 34, &bitsPerSample, 2);
+
+    // data chunk
+    std::memcpy(wav.data() + 36, "data", 4);
+    uint32_t dataSizeU32 = static_cast<uint32_t>(dataSize);
+    std::memcpy(wav.data() + 40, &dataSizeU32, 4);
+
+    // Generate sine wave samples
+    for (size_t i = 0; i < numSamples; ++i)
+    {
+      float phase = 2.0f * 3.14159265f * frequency * static_cast<float>(i) / static_cast<float>(sampleRate);
+      for (uint16_t c = 0; c < channels; ++c)
+      {
+        float sample = std::sin(phase + (c == 1 ? 3.14159265f / 2.0f : 0.0f)); // Phase offset for R channel
+        size_t offset = headerSize + (i * channels + c) * bytesPerSample;
+
+        if (bitsPerSample == 8)
+        {
+          uint8_t val = static_cast<uint8_t>((sample + 1.0f) * 127.5f);
+          wav[offset] = val;
+        }
+        else if (bitsPerSample == 16)
+        {
+          int16_t val = static_cast<int16_t>(sample * 32767.0f);
+          std::memcpy(wav.data() + offset, &val, 2);
+        }
+        else if (bitsPerSample == 24)
+        {
+          int32_t val = static_cast<int32_t>(sample * 8388607.0f);
+          wav[offset] = static_cast<uint8_t>(val & 0xFF);
+          wav[offset + 1] = static_cast<uint8_t>((val >> 8) & 0xFF);
+          wav[offset + 2] = static_cast<uint8_t>((val >> 16) & 0xFF);
+        }
+        else if (bitsPerSample == 32)
+        {
+          int32_t val = static_cast<int32_t>(sample * 2147483647.0f);
+          std::memcpy(wav.data() + offset, &val, 4);
+        }
+      }
+    }
+
+    return wav;
+  }
+
+  // Generate float WAV data
+  std::vector<uint8_t> generateTestWavFloat(size_t numSamples, uint16_t channels = 1,
+                                             uint32_t sampleRate = 44100, float frequency = 440.0f)
+  {
+    const size_t bytesPerSample = 4;
+    const size_t dataSize = numSamples * channels * bytesPerSample;
+    const size_t headerSize = 44;
+    std::vector<uint8_t> wav(headerSize + dataSize);
+
+    // RIFF header
+    std::memcpy(wav.data(), "RIFF", 4);
+    uint32_t fileSize = static_cast<uint32_t>(wav.size() - 8);
+    std::memcpy(wav.data() + 4, &fileSize, 4);
+    std::memcpy(wav.data() + 8, "WAVE", 4);
+
+    // fmt chunk
+    std::memcpy(wav.data() + 12, "fmt ", 4);
+    uint32_t fmtSize = 16;
+    std::memcpy(wav.data() + 16, &fmtSize, 4);
+    uint16_t audioFormat = 3; // IEEE float
+    std::memcpy(wav.data() + 20, &audioFormat, 2);
+    std::memcpy(wav.data() + 22, &channels, 2);
+    std::memcpy(wav.data() + 24, &sampleRate, 4);
+    uint32_t byteRate = sampleRate * channels * bytesPerSample;
+    std::memcpy(wav.data() + 28, &byteRate, 4);
+    uint16_t blockAlign = static_cast<uint16_t>(channels * bytesPerSample);
+    std::memcpy(wav.data() + 32, &blockAlign, 2);
+    uint16_t bitsPerSample = 32;
+    std::memcpy(wav.data() + 34, &bitsPerSample, 2);
+
+    // data chunk
+    std::memcpy(wav.data() + 36, "data", 4);
+    uint32_t dataSizeU32 = static_cast<uint32_t>(dataSize);
+    std::memcpy(wav.data() + 40, &dataSizeU32, 4);
+
+    // Generate samples
+    for (size_t i = 0; i < numSamples; ++i)
+    {
+      float phase = 2.0f * 3.14159265f * frequency * static_cast<float>(i) / static_cast<float>(sampleRate);
+      for (uint16_t c = 0; c < channels; ++c)
+      {
+        float sample = std::sin(phase + (c == 1 ? 3.14159265f / 2.0f : 0.0f));
+        size_t offset = headerSize + (i * channels + c) * bytesPerSample;
+        std::memcpy(wav.data() + offset, &sample, 4);
+      }
+    }
+
+    return wav;
+  }
+
+  void test_wavplayer_construction_and_defaults(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::PlaybackState;
+    using ShortwavDSP::LoopMode;
+    using ShortwavDSP::InterpolationQuality;
+
+    WavPlayer player;
+
+    // Check default values
+    T_ASSERT(ctx, !player.isLoaded());
+    T_ASSERT(ctx, player.getState() == PlaybackState::Stopped);
+    T_ASSERT(ctx, !player.isPlaying());
+    T_ASSERT_NEAR(ctx, player.getSpeed(), 1.0f, kTightEpsilon);
+    T_ASSERT_NEAR(ctx, player.getPitch(), 1.0f, kTightEpsilon);
+    T_ASSERT_NEAR(ctx, player.getVolume(), 1.0f, kTightEpsilon);
+    T_ASSERT(ctx, !player.getReverse());
+    T_ASSERT(ctx, player.getLoopMode() == LoopMode::Off);
+    T_ASSERT(ctx, player.getInterpolationQuality() == InterpolationQuality::Cubic);
+    T_ASSERT(ctx, player.getNumSamples() == 0);
+    T_ASSERT(ctx, player.getNumChannels() == 1);
+    T_ASSERT_NEAR(ctx, player.getDurationSeconds(), 0.0f, kTightEpsilon);
+  }
+
+  void test_wavplayer_load_from_memory_16bit_mono(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+
+    // Generate test WAV: 1 second of 440Hz sine at 44100Hz, 16-bit mono
+    auto wav = generateTestWav(44100, 1, 44100, 16, 440.0f);
+
+    auto result = player.loadFromMemory(wav.data(), wav.size());
+    T_ASSERT(ctx, result == WavError::None);
+    T_ASSERT(ctx, player.isLoaded());
+    T_ASSERT(ctx, player.getNumSamples() == 44100);
+    T_ASSERT(ctx, player.getNumChannels() == 1);
+    T_ASSERT(ctx, player.getFileSampleRate() == 44100);
+    T_ASSERT(ctx, player.getBitsPerSample() == 16);
+    T_ASSERT_NEAR(ctx, player.getDurationSeconds(), 1.0f, 0.001f);
+  }
+
+  void test_wavplayer_load_from_memory_24bit_stereo(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+
+    // Generate test WAV: 0.5 second of 880Hz sine at 48000Hz, 24-bit stereo
+    auto wav = generateTestWav(24000, 2, 48000, 24, 880.0f);
+
+    auto result = player.loadFromMemory(wav.data(), wav.size());
+    T_ASSERT(ctx, result == WavError::None);
+    T_ASSERT(ctx, player.isLoaded());
+    T_ASSERT(ctx, player.getNumSamples() == 24000);
+    T_ASSERT(ctx, player.getNumChannels() == 2);
+    T_ASSERT(ctx, player.getFileSampleRate() == 48000);
+    T_ASSERT(ctx, player.getBitsPerSample() == 24);
+  }
+
+  void test_wavplayer_load_from_memory_32bit_float(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+
+    // Generate test WAV: 32-bit float
+    auto wav = generateTestWavFloat(22050, 1, 44100, 440.0f);
+
+    auto result = player.loadFromMemory(wav.data(), wav.size());
+    T_ASSERT(ctx, result == WavError::None);
+    T_ASSERT(ctx, player.isLoaded());
+    T_ASSERT(ctx, player.getNumSamples() == 22050);
+    T_ASSERT(ctx, player.getNumChannels() == 1);
+    T_ASSERT(ctx, player.getBitsPerSample() == 32);
+  }
+
+  void test_wavplayer_load_from_memory_8bit(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+
+    // Generate test WAV: 8-bit mono
+    auto wav = generateTestWav(4410, 1, 44100, 8, 440.0f);
+
+    auto result = player.loadFromMemory(wav.data(), wav.size());
+    T_ASSERT(ctx, result == WavError::None);
+    T_ASSERT(ctx, player.isLoaded());
+    T_ASSERT(ctx, player.getBitsPerSample() == 8);
+  }
+
+  void test_wavplayer_invalid_wav_data(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+
+    // Test null pointer
+    auto result1 = player.loadFromMemory(nullptr, 100);
+    T_ASSERT(ctx, result1 == WavError::InvalidParameter);
+
+    // Test too small data (returns InvalidParameter because size check fails first)
+    uint8_t smallData[10] = {0};
+    auto result2 = player.loadFromMemory(smallData, 10);
+    T_ASSERT(ctx, result2 == WavError::InvalidParameter);
+
+    // Test invalid RIFF header
+    uint8_t invalidRiff[44] = {0};
+    std::memcpy(invalidRiff, "XXXX", 4);
+    auto result3 = player.loadFromMemory(invalidRiff, 44);
+    T_ASSERT(ctx, result3 == WavError::InvalidFormat);
+
+    // Test valid RIFF but invalid WAVE
+    std::memcpy(invalidRiff, "RIFF", 4);
+    std::memcpy(invalidRiff + 8, "XXXX", 4);
+    auto result4 = player.loadFromMemory(invalidRiff, 44);
+    T_ASSERT(ctx, result4 == WavError::InvalidFormat);
+  }
+
+  void test_wavplayer_playback_controls(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::PlaybackState;
+
+    WavPlayer player;
+    auto wav = generateTestWav(44100, 1, 44100, 16);
+    player.loadFromMemory(wav.data(), wav.size());
+
+    // Initial state
+    T_ASSERT(ctx, player.getState() == PlaybackState::Stopped);
+
+    // Play
+    player.play();
+    T_ASSERT(ctx, player.getState() == PlaybackState::Playing);
+    T_ASSERT(ctx, player.isPlaying());
+
+    // Pause
+    player.pause();
+    T_ASSERT(ctx, player.getState() == PlaybackState::Paused);
+    T_ASSERT(ctx, !player.isPlaying());
+
+    // Resume
+    player.play();
+    T_ASSERT(ctx, player.isPlaying());
+
+    // Stop (should reset position)
+    player.stop();
+    T_ASSERT(ctx, player.getState() == PlaybackState::Stopped);
+    T_ASSERT_NEAR(ctx, player.getPlaybackPosition(), 0.0f, kTightEpsilon);
+  }
+
+  void test_wavplayer_seek_functionality(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(44100, 1, 44100, 16);
+    player.loadFromMemory(wav.data(), wav.size());
+
+    // Seek to middle
+    player.seek(0.5f);
+    T_ASSERT_NEAR(ctx, player.getPlaybackPosition(), 0.5f, 0.001f);
+
+    // Seek to start
+    player.seek(0.0f);
+    T_ASSERT_NEAR(ctx, player.getPlaybackPosition(), 0.0f, kTightEpsilon);
+
+    // Seek to end
+    player.seek(1.0f);
+    T_ASSERT_NEAR(ctx, player.getPlaybackPosition(), 1.0f, 0.001f);
+
+    // Seek by sample
+    player.seekToSample(22050);
+    T_ASSERT_NEAR(ctx, player.getPlaybackPositionSamples(), 22050.0, 1.0);
+
+    // Seek out of bounds (should clamp)
+    player.seek(2.0f);
+    T_ASSERT(ctx, player.getPlaybackPosition() <= 1.0f);
+
+    player.seek(-1.0f);
+    T_ASSERT(ctx, player.getPlaybackPosition() >= 0.0f);
+  }
+
+  void test_wavplayer_parameter_setters(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::LoopMode;
+    using ShortwavDSP::InterpolationQuality;
+
+    WavPlayer player;
+
+    // Speed
+    player.setSpeed(2.0f);
+    T_ASSERT_NEAR(ctx, player.getSpeed(), 2.0f, kTightEpsilon);
+
+    player.setSpeed(0.5f);
+    T_ASSERT_NEAR(ctx, player.getSpeed(), 0.5f, kTightEpsilon);
+
+    // Speed clamping
+    player.setSpeed(0.001f);
+    T_ASSERT(ctx, player.getSpeed() >= 0.01f);
+
+    player.setSpeed(1000.0f);
+    T_ASSERT(ctx, player.getSpeed() <= 100.0f);
+
+    // Pitch
+    player.setPitch(2.0f);
+    T_ASSERT_NEAR(ctx, player.getPitch(), 2.0f, kTightEpsilon);
+
+    // Volume
+    player.setVolume(0.5f);
+    T_ASSERT_NEAR(ctx, player.getVolume(), 0.5f, kTightEpsilon);
+
+    player.setVolume(0.0f);
+    T_ASSERT_NEAR(ctx, player.getVolume(), 0.0f, kTightEpsilon);
+
+    // Reverse
+    player.setReverse(true);
+    T_ASSERT(ctx, player.getReverse());
+
+    player.setReverse(false);
+    T_ASSERT(ctx, !player.getReverse());
+
+    // Loop mode
+    player.setLoopMode(LoopMode::Forward);
+    T_ASSERT(ctx, player.getLoopMode() == LoopMode::Forward);
+
+    player.setLoopMode(LoopMode::PingPong);
+    T_ASSERT(ctx, player.getLoopMode() == LoopMode::PingPong);
+
+    // Interpolation
+    player.setInterpolationQuality(InterpolationQuality::None);
+    T_ASSERT(ctx, player.getInterpolationQuality() == InterpolationQuality::None);
+
+    player.setInterpolationQuality(InterpolationQuality::Linear);
+    T_ASSERT(ctx, player.getInterpolationQuality() == InterpolationQuality::Linear);
+  }
+
+  void test_wavplayer_process_sample_mono(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(4410, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+
+    // Not playing - should return silence
+    float sample = player.processSample();
+    T_ASSERT_NEAR(ctx, sample, 0.0f, kTightEpsilon);
+
+    // Start playing
+    player.play();
+    player.setVolume(1.0f);
+
+    // Process samples and verify they're in valid range
+    bool allValid = true;
+    for (int i = 0; i < 1000; ++i)
+    {
+      float s = player.processSample();
+      if (!std::isfinite(s) || s < -1.5f || s > 1.5f)
+      {
+        allValid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allValid);
+
+    // Position should have advanced
+    T_ASSERT(ctx, player.getPlaybackPositionSamples() > 0.0);
+  }
+
+  void test_wavplayer_process_sample_stereo(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(4410, 2, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.play();
+
+    // Process stereo samples
+    bool allValid = true;
+    for (int i = 0; i < 1000; ++i)
+    {
+      float left, right;
+      player.processSampleStereo(left, right);
+      if (!std::isfinite(left) || !std::isfinite(right) ||
+          left < -1.5f || left > 1.5f || right < -1.5f || right > 1.5f)
+      {
+        allValid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allValid);
+  }
+
+  void test_wavplayer_buffer_processing(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(44100, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.play();
+
+    // Process buffer
+    std::vector<float> buffer(512);
+    player.processBuffer(buffer.data(), buffer.size());
+
+    // Verify all samples are valid
+    bool allValid = true;
+    for (size_t i = 0; i < buffer.size(); ++i)
+    {
+      if (!std::isfinite(buffer[i]))
+      {
+        allValid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allValid);
+  }
+
+  void test_wavplayer_stereo_buffer_processing(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(44100, 2, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.play();
+
+    // Test interleaved stereo buffer
+    std::vector<float> interleavedBuffer(1024); // 512 frames * 2 channels
+    player.processBufferStereo(interleavedBuffer.data(), 512);
+
+    bool allValid = true;
+    for (size_t i = 0; i < interleavedBuffer.size(); ++i)
+    {
+      if (!std::isfinite(interleavedBuffer[i]))
+      {
+        allValid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allValid);
+
+    // Test split stereo buffers
+    std::vector<float> left(256), right(256);
+    player.processBufferStereoSplit(left.data(), right.data(), 256);
+
+    for (size_t i = 0; i < 256; ++i)
+    {
+      if (!std::isfinite(left[i]) || !std::isfinite(right[i]))
+      {
+        allValid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allValid);
+  }
+
+  void test_wavplayer_interpolation_quality(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::InterpolationQuality;
+
+    WavPlayer player;
+    auto wav = generateTestWav(4410, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+
+    // Test each interpolation quality
+    const InterpolationQuality qualities[] = {
+        InterpolationQuality::None,
+        InterpolationQuality::Linear,
+        InterpolationQuality::Cubic};
+
+    for (auto quality : qualities)
+    {
+      player.setInterpolationQuality(quality);
+      player.seek(0.0f);
+      player.play();
+
+      bool valid = true;
+      for (int i = 0; i < 100; ++i)
+      {
+        float s = player.processSample();
+        if (!std::isfinite(s))
+        {
+          valid = false;
+          break;
+        }
+      }
+      T_ASSERT(ctx, valid);
+      player.stop();
+    }
+  }
+
+  void test_wavplayer_speed_variation(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::LoopMode;
+
+    WavPlayer player;
+    auto wav = generateTestWav(44100, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.setLoopMode(LoopMode::Off);
+
+    // Test double speed - should finish in half the time
+    player.setSpeed(2.0f);
+    player.setPitch(1.0f);
+    player.seek(0.0f);
+    player.play();
+
+    // Process enough samples
+    int samplesProcessed = 0;
+    while (player.isPlaying() && samplesProcessed < 100000)
+    {
+      player.processSample();
+      samplesProcessed++;
+    }
+
+    // At 2x speed, should take ~22050 samples to finish 44100 sample file
+    T_ASSERT(ctx, samplesProcessed < 30000);
+    T_ASSERT(ctx, samplesProcessed > 20000);
+
+    // Test half speed
+    player.setSpeed(0.5f);
+    player.seek(0.0f);
+    player.play();
+
+    samplesProcessed = 0;
+    while (player.isPlaying() && samplesProcessed < 200000)
+    {
+      player.processSample();
+      samplesProcessed++;
+    }
+
+    // At 0.5x speed, should take ~88200 samples
+    T_ASSERT(ctx, samplesProcessed > 80000);
+  }
+
+  void test_wavplayer_pitch_variation(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(44100, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.setSpeed(1.0f);
+
+    // Test octave up (2x pitch)
+    player.setPitch(2.0f);
+    player.seek(0.0f);
+    player.play();
+
+    bool allFinite = true;
+    for (int i = 0; i < 1000; ++i)
+    {
+      float s = player.processSample();
+      if (!std::isfinite(s))
+      {
+        allFinite = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allFinite);
+
+    // Test octave down (0.5x pitch)
+    player.setPitch(0.5f);
+    player.seek(0.0f);
+
+    for (int i = 0; i < 1000; ++i)
+    {
+      float s = player.processSample();
+      if (!std::isfinite(s))
+      {
+        allFinite = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allFinite);
+  }
+
+  void test_wavplayer_reverse_playback(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::LoopMode;
+
+    WavPlayer player;
+    auto wav = generateTestWav(4410, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.setLoopMode(LoopMode::Off);
+
+    // Enable reverse playback
+    player.setReverse(true);
+    player.stop(); // Reset to end position for reverse
+    player.play();
+
+    // Process samples - position should decrease
+    double startPos = player.getPlaybackPositionSamples();
+    for (int i = 0; i < 100; ++i)
+    {
+      player.processSample();
+    }
+    double endPos = player.getPlaybackPositionSamples();
+
+    T_ASSERT(ctx, endPos < startPos);
+
+    // All samples should be valid
+    player.stop();
+    player.play();
+    bool allValid = true;
+    int count = 0;
+    while (player.isPlaying() && count < 10000)
+    {
+      float s = player.processSample();
+      if (!std::isfinite(s))
+      {
+        allValid = false;
+        break;
+      }
+      count++;
+    }
+    T_ASSERT(ctx, allValid);
+  }
+
+  void test_wavplayer_loop_forward(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::LoopMode;
+
+    WavPlayer player;
+    auto wav = generateTestWav(1000, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.setLoopMode(LoopMode::Forward);
+    player.play();
+
+    // Process more samples than file contains
+    int samplesProcessed = 0;
+    bool allValid = true;
+    for (int i = 0; i < 5000; ++i)
+    {
+      float s = player.processSample();
+      if (!std::isfinite(s))
+      {
+        allValid = false;
+        break;
+      }
+      samplesProcessed++;
+    }
+
+    // Should still be playing (looping)
+    T_ASSERT(ctx, player.isPlaying());
+    T_ASSERT(ctx, allValid);
+    T_ASSERT(ctx, samplesProcessed == 5000);
+  }
+
+  void test_wavplayer_loop_pingpong(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::LoopMode;
+
+    WavPlayer player;
+    auto wav = generateTestWav(1000, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.setLoopMode(LoopMode::PingPong);
+    player.play();
+
+    // Process enough samples for multiple direction changes
+    bool allValid = true;
+    for (int i = 0; i < 5000; ++i)
+    {
+      float s = player.processSample();
+      if (!std::isfinite(s) || s < -2.0f || s > 2.0f)
+      {
+        allValid = false;
+        break;
+      }
+    }
+
+    T_ASSERT(ctx, player.isPlaying());
+    T_ASSERT(ctx, allValid);
+  }
+
+  void test_wavplayer_volume_control(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(4410, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+
+    // Test silence
+    player.setVolume(0.0f);
+    player.play();
+    player.seek(0.25f); // Seek past zero crossing
+
+    float silentSample = player.processSample();
+    T_ASSERT_NEAR(ctx, silentSample, 0.0f, kTightEpsilon);
+
+    // Test half volume
+    player.setVolume(0.5f);
+    player.seek(0.25f);
+    player.play();
+
+    // Get reference at full volume
+    player.setVolume(1.0f);
+    player.seek(0.25f);
+    float fullSample = player.processSample();
+
+    player.setVolume(0.5f);
+    player.seek(0.25f);
+    float halfSample = player.processSample();
+
+    // Half volume should be approximately half amplitude
+    if (std::fabs(fullSample) > 0.1f)
+    {
+      T_ASSERT_NEAR(ctx, halfSample / fullSample, 0.5f, 0.1f);
+    }
+  }
+
+  void test_wavplayer_sample_rate_conversion(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::LoopMode;
+
+    WavPlayer player;
+    // Load 44100Hz file
+    auto wav = generateTestWav(44100, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+
+    // Play at 96000Hz (should play slower in terms of samples)
+    player.setSampleRate(96000.0f);
+    player.setLoopMode(LoopMode::Off);
+    player.play();
+
+    int samplesProcessed = 0;
+    while (player.isPlaying() && samplesProcessed < 200000)
+    {
+      player.processSample();
+      samplesProcessed++;
+    }
+
+    // At 96kHz output rate with 44.1kHz source, should need ~96000 samples
+    // to play 1 second of audio
+    T_ASSERT(ctx, samplesProcessed > 90000);
+    T_ASSERT(ctx, samplesProcessed < 100000);
+  }
+
+  void test_wavplayer_raw_sample_access(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(1000, 2, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+
+    // Access raw samples
+    float sample0L = player.getRawSample(0, 0);
+    float sample0R = player.getRawSample(0, 1);
+    float sample500L = player.getRawSample(500, 0);
+
+    T_ASSERT(ctx, std::isfinite(sample0L));
+    T_ASSERT(ctx, std::isfinite(sample0R));
+    T_ASSERT(ctx, std::isfinite(sample500L));
+
+    // Out of bounds should return 0
+    float outOfBounds = player.getRawSample(10000, 0);
+    T_ASSERT_NEAR(ctx, outOfBounds, 0.0f, kTightEpsilon);
+
+    // Invalid channel should return 0
+    float invalidChannel = player.getRawSample(0, 5);
+    T_ASSERT_NEAR(ctx, invalidChannel, 0.0f, kTightEpsilon);
+
+    // Test audio data pointer
+    T_ASSERT(ctx, player.getAudioData() != nullptr);
+    T_ASSERT(ctx, player.getAudioDataSize() == 1000 * 2);
+  }
+
+  void test_wavplayer_unload(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::PlaybackState;
+
+    WavPlayer player;
+    auto wav = generateTestWav(44100, 1, 44100, 16);
+    player.loadFromMemory(wav.data(), wav.size());
+
+    T_ASSERT(ctx, player.isLoaded());
+    T_ASSERT(ctx, player.getNumSamples() > 0);
+
+    player.unload();
+
+    T_ASSERT(ctx, !player.isLoaded());
+    T_ASSERT(ctx, player.getNumSamples() == 0);
+    T_ASSERT(ctx, player.getState() == PlaybackState::Stopped);
+    T_ASSERT(ctx, player.getAudioData() != nullptr || player.getAudioDataSize() == 0);
+  }
+
+  void test_wavplayer_move_semantics(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player1;
+    auto wav = generateTestWav(44100, 2, 48000, 16);
+    player1.loadFromMemory(wav.data(), wav.size());
+    player1.setSpeed(1.5f);
+    player1.seek(0.5f);
+
+    // Move construct
+    WavPlayer player2(std::move(player1));
+
+    T_ASSERT(ctx, player2.isLoaded());
+    T_ASSERT(ctx, player2.getNumSamples() == 44100);
+    T_ASSERT(ctx, player2.getNumChannels() == 2);
+    T_ASSERT_NEAR(ctx, player2.getSpeed(), 1.5f, kTightEpsilon);
+    T_ASSERT_NEAR(ctx, player2.getPlaybackPosition(), 0.5f, 0.01f);
+
+    // Move assign
+    WavPlayer player3;
+    player3 = std::move(player2);
+
+    T_ASSERT(ctx, player3.isLoaded());
+    T_ASSERT(ctx, player3.getNumSamples() == 44100);
+  }
+
+  void test_wavplayer_error_string_conversion(TestContext &ctx)
+  {
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::wavErrorToString;
+
+    // Test all error codes have valid strings
+    T_ASSERT(ctx, std::strlen(wavErrorToString(WavError::None)) > 0);
+    T_ASSERT(ctx, std::strlen(wavErrorToString(WavError::FileNotFound)) > 0);
+    T_ASSERT(ctx, std::strlen(wavErrorToString(WavError::InvalidFormat)) > 0);
+    T_ASSERT(ctx, std::strlen(wavErrorToString(WavError::UnsupportedFormat)) > 0);
+    T_ASSERT(ctx, std::strlen(wavErrorToString(WavError::CorruptedData)) > 0);
+    T_ASSERT(ctx, std::strlen(wavErrorToString(WavError::OutOfMemory)) > 0);
+    T_ASSERT(ctx, std::strlen(wavErrorToString(WavError::ReadError)) > 0);
+    T_ASSERT(ctx, std::strlen(wavErrorToString(WavError::InvalidState)) > 0);
+    T_ASSERT(ctx, std::strlen(wavErrorToString(WavError::InvalidParameter)) > 0);
+  }
+
+  void test_wavplayer_denormal_protection(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(1000, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.setVolume(1e-20f); // Extremely small volume
+    player.play();
+
+    // Process samples - should not produce denormals
+    bool allValid = true;
+    for (int i = 0; i < 500; ++i)
+    {
+      float s = player.processSample();
+      // Check for denormals (very small numbers that slow down CPU)
+      if (!std::isfinite(s) || (s != 0.0f && std::fabs(s) < 1e-30f))
+      {
+        // Allow exact zeros but flag very tiny non-zero values
+        if (s != 0.0f && std::fabs(s) < 1e-35f)
+        {
+          allValid = false;
+          break;
+        }
+      }
+    }
+    T_ASSERT(ctx, allValid);
+  }
+
+  void test_wavplayer_concurrent_parameter_changes(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::LoopMode;
+
+    WavPlayer player;
+    auto wav = generateTestWav(44100, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.setLoopMode(LoopMode::Forward);
+    player.play();
+
+    // Simulate rapid parameter changes while processing
+    bool allValid = true;
+    for (int i = 0; i < 10000; ++i)
+    {
+      // Change parameters every 100 samples
+      if (i % 100 == 0)
+      {
+        player.setSpeed(0.5f + (i % 10) * 0.1f);
+        player.setPitch(0.8f + (i % 5) * 0.1f);
+        player.setVolume(0.5f + (i % 3) * 0.2f);
+      }
+
+      float s = player.processSample();
+      if (!std::isfinite(s))
+      {
+        allValid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allValid);
+    T_ASSERT(ctx, player.isPlaying());
+  }
+
+  void test_wavplayer_boundary_sample_access(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::LoopMode;
+    using ShortwavDSP::InterpolationQuality;
+
+    WavPlayer player;
+    // Small file to test boundary conditions
+    auto wav = generateTestWav(100, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.setLoopMode(LoopMode::Off);
+
+    // Test with cubic interpolation at boundaries
+    player.setInterpolationQuality(InterpolationQuality::Cubic);
+
+    // Seek near end
+    player.seekToSample(98);
+    player.play();
+
+    bool allValid = true;
+    for (int i = 0; i < 10; ++i)
+    {
+      float s = player.processSample();
+      if (!std::isfinite(s))
+      {
+        allValid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allValid);
+
+    // Test at start
+    player.seek(0.0f);
+    player.play();
+    float startSample = player.processSample();
+    T_ASSERT(ctx, std::isfinite(startSample));
+  }
+
+  void test_wavplayer_performance_benchmark(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+    using ShortwavDSP::LoopMode;
+
+    WavPlayer player;
+    auto wav = generateTestWav(44100, 2, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(48000.0f);
+    player.setLoopMode(LoopMode::Forward);
+    player.play();
+
+    // Benchmark buffer processing
+    const size_t bufferSize = 512;
+    const int iterations = 1000;
+    std::vector<float> buffer(bufferSize * 2); // Stereo
+
+    for (int iter = 0; iter < iterations; ++iter)
+    {
+      player.processBufferStereo(buffer.data(), bufferSize);
+    }
+
+    // Verify final output is valid
+    bool allValid = true;
+    for (size_t i = 0; i < buffer.size(); ++i)
+    {
+      if (!std::isfinite(buffer[i]))
+      {
+        allValid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allValid);
+    T_ASSERT(ctx, player.isPlaying());
+  }
+
+  void test_wavplayer_empty_file_handling(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+
+    // Create a WAV with valid header but zero data
+    std::vector<uint8_t> emptyWav(44);
+    std::memcpy(emptyWav.data(), "RIFF", 4);
+    uint32_t fileSize = 36;
+    std::memcpy(emptyWav.data() + 4, &fileSize, 4);
+    std::memcpy(emptyWav.data() + 8, "WAVE", 4);
+    std::memcpy(emptyWav.data() + 12, "fmt ", 4);
+    uint32_t fmtSize = 16;
+    std::memcpy(emptyWav.data() + 16, &fmtSize, 4);
+    uint16_t audioFormat = 1;
+    std::memcpy(emptyWav.data() + 20, &audioFormat, 2);
+    uint16_t channels = 1;
+    std::memcpy(emptyWav.data() + 22, &channels, 2);
+    uint32_t sampleRate = 44100;
+    std::memcpy(emptyWav.data() + 24, &sampleRate, 4);
+    uint32_t byteRate = 88200;
+    std::memcpy(emptyWav.data() + 28, &byteRate, 4);
+    uint16_t blockAlign = 2;
+    std::memcpy(emptyWav.data() + 32, &blockAlign, 2);
+    uint16_t bitsPerSample = 16;
+    std::memcpy(emptyWav.data() + 34, &bitsPerSample, 2);
+    std::memcpy(emptyWav.data() + 36, "data", 4);
+    uint32_t dataSize = 0;
+    std::memcpy(emptyWav.data() + 40, &dataSize, 4);
+
+    auto result = player.loadFromMemory(emptyWav.data(), emptyWav.size());
+    T_ASSERT(ctx, result == WavError::CorruptedData);
+    T_ASSERT(ctx, !player.isLoaded());
+  }
+
+  void test_wavplayer_not_loaded_operations(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::PlaybackState;
+
+    WavPlayer player;
+
+    // Operations on unloaded player should be safe
+    player.play();
+    T_ASSERT(ctx, player.getState() == PlaybackState::Stopped);
+
+    float sample = player.processSample();
+    T_ASSERT_NEAR(ctx, sample, 0.0f, kTightEpsilon);
+
+    float left, right;
+    player.processSampleStereo(left, right);
+    T_ASSERT_NEAR(ctx, left, 0.0f, kTightEpsilon);
+    T_ASSERT_NEAR(ctx, right, 0.0f, kTightEpsilon);
+
+    std::vector<float> buffer(100, 1.0f);
+    player.processBuffer(buffer.data(), buffer.size());
+    T_ASSERT_NEAR(ctx, buffer[0], 0.0f, kTightEpsilon);
+
+    player.seek(0.5f);
+    T_ASSERT_NEAR(ctx, player.getPlaybackPosition(), 0.0f, kTightEpsilon);
+  }
+
+  void test_wavplayer_mono_to_stereo_duplication(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(1000, 1, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.play();
+
+    // When reading mono as stereo, both channels should be identical
+    for (int i = 0; i < 100; ++i)
+    {
+      float left, right;
+      player.processSampleStereo(left, right);
+      T_ASSERT_NEAR(ctx, left, right, kTightEpsilon);
+    }
+  }
+
+  void test_wavplayer_stereo_to_mono_mixdown(TestContext &ctx)
+  {
+    using ShortwavDSP::WavPlayer;
+    using ShortwavDSP::WavError;
+
+    WavPlayer player;
+    auto wav = generateTestWav(1000, 2, 44100, 16, 440.0f);
+    player.loadFromMemory(wav.data(), wav.size());
+    player.setSampleRate(44100.0f);
+    player.play();
+
+    // Mono output from stereo file should be finite
+    bool allValid = true;
+    for (int i = 0; i < 100; ++i)
+    {
+      float mono = player.processSample();
+      if (!std::isfinite(mono))
+      {
+        allValid = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allValid);
+  }
+
   // Entry point to run all tests when this TU is built as a standalone test binary.
   // In normal plugin builds this file is not included.
 } // namespace
@@ -2162,6 +3323,41 @@ int main()
   ::test_lowpass_continuity_on_parameter_change(ctx);
   ::test_lowpass_impulse_response(ctx);
   ::test_lowpass_performance_benchmark(ctx);
+
+  // WavPlayer
+  ::test_wavplayer_construction_and_defaults(ctx);
+  ::test_wavplayer_load_from_memory_16bit_mono(ctx);
+  ::test_wavplayer_load_from_memory_24bit_stereo(ctx);
+  ::test_wavplayer_load_from_memory_32bit_float(ctx);
+  ::test_wavplayer_load_from_memory_8bit(ctx);
+  ::test_wavplayer_invalid_wav_data(ctx);
+  ::test_wavplayer_playback_controls(ctx);
+  ::test_wavplayer_seek_functionality(ctx);
+  ::test_wavplayer_parameter_setters(ctx);
+  ::test_wavplayer_process_sample_mono(ctx);
+  ::test_wavplayer_process_sample_stereo(ctx);
+  ::test_wavplayer_buffer_processing(ctx);
+  ::test_wavplayer_stereo_buffer_processing(ctx);
+  ::test_wavplayer_interpolation_quality(ctx);
+  ::test_wavplayer_speed_variation(ctx);
+  ::test_wavplayer_pitch_variation(ctx);
+  ::test_wavplayer_reverse_playback(ctx);
+  ::test_wavplayer_loop_forward(ctx);
+  ::test_wavplayer_loop_pingpong(ctx);
+  ::test_wavplayer_volume_control(ctx);
+  ::test_wavplayer_sample_rate_conversion(ctx);
+  ::test_wavplayer_raw_sample_access(ctx);
+  ::test_wavplayer_unload(ctx);
+  ::test_wavplayer_move_semantics(ctx);
+  ::test_wavplayer_error_string_conversion(ctx);
+  ::test_wavplayer_denormal_protection(ctx);
+  ::test_wavplayer_concurrent_parameter_changes(ctx);
+  ::test_wavplayer_boundary_sample_access(ctx);
+  ::test_wavplayer_performance_benchmark(ctx);
+  ::test_wavplayer_empty_file_handling(ctx);
+  ::test_wavplayer_not_loaded_operations(ctx);
+  ::test_wavplayer_mono_to_stereo_duplication(ctx);
+  ::test_wavplayer_stereo_to_mono_mixdown(ctx);
 
   ctx.summary();
   return (ctx.failed == 0) ? 0 : 1;
