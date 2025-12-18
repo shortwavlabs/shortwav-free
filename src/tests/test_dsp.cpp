@@ -18,6 +18,7 @@
 #include "../dsp/drift.h"
 #include "../dsp/formant-osc.h"
 #include "../dsp/3-band-eq.h"
+#include "../dsp/low-pass.h"
 
 namespace
 {
@@ -1452,6 +1453,632 @@ namespace
     // The assertion just ensures the algorithm completed successfully
   }
 
+  //------------------------------------------------------------------------------
+  // MoogLowPassFilter tests
+  //------------------------------------------------------------------------------
+
+  void test_lowpass_basic_construction_and_defaults(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    
+    // Verify default parameter values are sensible
+    T_ASSERT(ctx, filter.getSampleRate() > 0.0f);
+    T_ASSERT(ctx, filter.getCutoff() > 0.0f);
+    T_ASSERT(ctx, filter.getResonance() >= 0.0f && filter.getResonance() <= 1.0f);
+    T_ASSERT(ctx, filter.isStateValid());
+  }
+
+  void test_lowpass_parameter_clamping(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(48000.0f);
+
+    // Test cutoff clamping - should clamp to [20Hz, Nyquist/2]
+    filter.setCutoff(-100.0f);
+    T_ASSERT(ctx, filter.getCutoff() >= 20.0f);
+
+    filter.setCutoff(100000.0f); // Way above Nyquist
+    T_ASSERT(ctx, filter.getCutoff() < 24000.0f); // Should be < Nyquist/2
+
+    filter.setCutoff(1000.0f);
+    T_ASSERT_NEAR(ctx, filter.getCutoff(), 1000.0f, 1.0f);
+
+    // Test resonance clamping - should clamp to [0, 1]
+    filter.setResonance(-0.5f);
+    T_ASSERT(ctx, filter.getResonance() >= 0.0f);
+
+    filter.setResonance(2.0f);
+    T_ASSERT(ctx, filter.getResonance() <= 1.0f);
+
+    filter.setResonance(0.7f);
+    T_ASSERT_NEAR(ctx, filter.getResonance(), 0.7f, 0.01f);
+  }
+
+  void test_lowpass_reset_clears_state(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(44100.0f);
+    filter.setCutoff(1000.0f);
+    filter.setResonance(0.8f);
+
+    // Process some samples to build up state
+    for (int i = 0; i < 100; ++i)
+    {
+      filter.processSample(1.0f);
+    }
+
+    // Reset should clear state
+    filter.reset();
+
+    // Process silence - output should remain near zero
+    float maxOutput = 0.0f;
+    for (int i = 0; i < 100; ++i)
+    {
+      float out = filter.processSample(0.0f);
+      maxOutput = std::max(maxOutput, std::fabs(out));
+    }
+
+    T_ASSERT(ctx, maxOutput < 0.001f);
+  }
+
+  void test_lowpass_silence_produces_silence(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(48000.0f);
+    filter.setCutoff(800.0f);
+    filter.setResonance(0.5f);
+    filter.reset();
+
+    // Process silence - should produce silence
+    for (int i = 0; i < 1000; ++i)
+    {
+      float out = filter.processSample(0.0f);
+      T_ASSERT(ctx, std::fabs(out) < 1e-20f);
+    }
+  }
+
+  void test_lowpass_dc_offset_preservation(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(44100.0f);
+    filter.setCutoff(100.0f); // Low cutoff passes DC
+    filter.setResonance(0.0f); // No resonance
+    filter.reset();
+
+    const float dcValue = 0.5f;
+    
+    // Let filter settle to DC value
+    for (int i = 0; i < 5000; ++i)
+    {
+      filter.processSample(dcValue);
+    }
+
+    // After settling, output should be close to input DC value
+    float output = filter.processSample(dcValue);
+    T_ASSERT_NEAR(ctx, output, dcValue, 0.05f);
+  }
+
+  void test_lowpass_frequency_response_low_freq(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    const float sr = 48000.0f;
+    filter.setSampleRate(sr);
+    filter.setCutoff(1000.0f);
+    filter.setResonance(0.0f);
+    filter.reset();
+
+    // Test signal: 200Hz sine wave (well below cutoff)
+    // Should pass through with minimal attenuation
+    const float testFreq = 200.0f;
+    const int numSamples = static_cast<int>(sr / testFreq * 10); // 10 cycles
+    
+    float maxInput = 0.0f;
+    float maxOutput = 0.0f;
+    
+    for (int i = 0; i < numSamples; ++i)
+    {
+      const float phase = 2.0f * 3.14159265f * testFreq * i / sr;
+      const float input = std::sin(phase);
+      const float output = filter.processSample(input);
+      
+      if (i > numSamples / 2) // Skip transient
+      {
+        maxInput = std::max(maxInput, std::fabs(input));
+        maxOutput = std::max(maxOutput, std::fabs(output));
+      }
+    }
+
+    // Output should be similar to input (minimal attenuation)
+    const float attenuation = maxOutput / maxInput;
+    T_ASSERT(ctx, attenuation > 0.7f); // Should pass most of the signal
+    T_ASSERT(ctx, attenuation <= 1.2f);
+  }
+
+  void test_lowpass_frequency_response_high_freq(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    const float sr = 48000.0f;
+    filter.setSampleRate(sr);
+    filter.setCutoff(500.0f);
+    filter.setResonance(0.0f);
+    filter.reset();
+
+    // Test signal: 5000Hz sine wave (well above cutoff)
+    // Should be heavily attenuated by 24dB/oct filter
+    const float testFreq = 5000.0f;
+    const int numSamples = static_cast<int>(sr / testFreq * 20);
+    
+    float maxInput = 0.0f;
+    float maxOutput = 0.0f;
+    
+    for (int i = 0; i < numSamples; ++i)
+    {
+      const float phase = 2.0f * 3.14159265f * testFreq * i / sr;
+      const float input = std::sin(phase);
+      const float output = filter.processSample(input);
+      
+      if (i > numSamples / 2) // Skip transient
+      {
+        maxInput = std::max(maxInput, std::fabs(input));
+        maxOutput = std::max(maxOutput, std::fabs(output));
+      }
+    }
+
+    // Output should be heavily attenuated
+    const float attenuation = maxOutput / maxInput;
+    T_ASSERT(ctx, attenuation < 0.15f); // Should attenuate significantly
+  }
+
+  void test_lowpass_resonance_peak_effect(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    const float sr = 44100.0f;
+    const float cutoff = 1000.0f;
+
+    // Create two filters: one with no resonance, one with high resonance
+    MoogLowPassFilter filterNoRes;
+    filterNoRes.setSampleRate(sr);
+    filterNoRes.setCutoff(cutoff);
+    filterNoRes.setResonance(0.0f);
+    filterNoRes.reset();
+
+    MoogLowPassFilter filterWithRes;
+    filterWithRes.setSampleRate(sr);
+    filterWithRes.setCutoff(cutoff);
+    filterWithRes.setResonance(0.9f); // High resonance
+    filterWithRes.reset();
+
+    // Test at cutoff frequency - resonant filter should have higher peak
+    const float testFreq = cutoff;
+    const int numSamples = static_cast<int>(sr / testFreq * 20);
+    
+    float maxOutputNoRes = 0.0f;
+    float maxOutputWithRes = 0.0f;
+    
+    for (int i = 0; i < numSamples; ++i)
+    {
+      const float phase = 2.0f * 3.14159265f * testFreq * i / sr;
+      const float input = 0.5f * std::sin(phase); // Reduced amplitude for safety
+      
+      const float out1 = filterNoRes.processSample(input);
+      const float out2 = filterWithRes.processSample(input);
+      
+      if (i > numSamples / 2) // Skip transient
+      {
+        maxOutputNoRes = std::max(maxOutputNoRes, std::fabs(out1));
+        maxOutputWithRes = std::max(maxOutputWithRes, std::fabs(out2));
+      }
+    }
+
+    // Resonant filter should produce larger output at cutoff frequency
+    T_ASSERT(ctx, maxOutputWithRes > maxOutputNoRes * 1.5f);
+  }
+
+  void test_lowpass_self_oscillation(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(44100.0f);
+    filter.setCutoff(1000.0f);
+    filter.setResonance(1.0f); // Maximum resonance
+    filter.reset();
+
+    // Inject a small impulse
+    filter.processSample(0.1f);
+
+    // With max resonance, filter should sustain oscillation
+    float maxOutput = 0.0f;
+    for (int i = 0; i < 5000; ++i)
+    {
+      float out = filter.processSample(0.0f); // No input after impulse
+      maxOutput = std::max(maxOutput, std::fabs(out));
+    }
+
+    // Should have significant sustained output from self-oscillation
+    T_ASSERT(ctx, maxOutput > 0.01f);
+  }
+
+  void test_lowpass_buffer_processing(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(48000.0f);
+    filter.setCutoff(1200.0f);
+    filter.setResonance(0.5f);
+    filter.reset();
+
+    const size_t bufferSize = 512;
+    std::vector<float> input(bufferSize);
+    std::vector<float> output(bufferSize);
+
+    // Generate test signal (mix of frequencies)
+    for (size_t i = 0; i < bufferSize; ++i)
+    {
+      const float t = static_cast<float>(i) / 48000.0f;
+      input[i] = 0.5f * std::sin(2.0f * 3.14159265f * 400.0f * t) +
+                 0.3f * std::sin(2.0f * 3.14159265f * 2000.0f * t);
+    }
+
+    filter.processBuffer(input.data(), output.data(), bufferSize);
+
+    // Verify all outputs are finite
+    for (size_t i = 0; i < bufferSize; ++i)
+    {
+      T_ASSERT(ctx, std::isfinite(output[i]));
+    }
+
+    // Verify output is not all zeros
+    float maxOutput = 0.0f;
+    for (size_t i = 0; i < bufferSize; ++i)
+    {
+      maxOutput = std::max(maxOutput, std::fabs(output[i]));
+    }
+    T_ASSERT(ctx, maxOutput > 0.01f);
+  }
+
+  void test_lowpass_inplace_processing(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(44100.0f);
+    filter.setCutoff(1000.0f);
+    filter.setResonance(0.4f);
+    filter.reset();
+
+    const size_t bufferSize = 256;
+    std::vector<float> buffer(bufferSize);
+
+    // Generate input
+    for (size_t i = 0; i < bufferSize; ++i)
+    {
+      buffer[i] = std::sin(2.0f * 3.14159265f * 500.0f * i / 44100.0f);
+    }
+
+    // Process in-place
+    filter.processBuffer(buffer.data(), buffer.data(), bufferSize);
+
+    // Verify processing occurred (output differs from pure sine)
+    bool modified = false;
+    for (size_t i = 10; i < bufferSize; ++i)
+    {
+      const float expected = std::sin(2.0f * 3.14159265f * 500.0f * i / 44100.0f);
+      if (std::fabs(buffer[i] - expected) > 0.01f)
+      {
+        modified = true;
+        break;
+      }
+    }
+    T_ASSERT(ctx, modified);
+  }
+
+  void test_lowpass_stereo_processing(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(48000.0f);
+    filter.setCutoff(1500.0f);
+    filter.setResonance(0.6f);
+    filter.reset();
+
+    const size_t numSamples = 256;
+    std::vector<float> inputL(numSamples);
+    std::vector<float> inputR(numSamples);
+    std::vector<float> outputL(numSamples);
+    std::vector<float> outputR(numSamples);
+
+    // Generate different signals for L/R
+    for (size_t i = 0; i < numSamples; ++i)
+    {
+      const float t = static_cast<float>(i) / 48000.0f;
+      inputL[i] = std::sin(2.0f * 3.14159265f * 600.0f * t);
+      inputR[i] = std::sin(2.0f * 3.14159265f * 800.0f * t);
+    }
+
+    filter.processStereoBuffer(inputL.data(), inputR.data(),
+                               outputL.data(), outputR.data(),
+                               numSamples);
+
+    // Verify all outputs are finite
+    bool allFinite = true;
+    for (size_t i = 0; i < numSamples; ++i)
+    {
+      if (!std::isfinite(outputL[i]) || !std::isfinite(outputR[i]))
+      {
+        allFinite = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allFinite);
+
+    // Channels should differ (different inputs processed)
+    bool channelsDifferent = false;
+    for (size_t i = 50; i < numSamples; ++i)
+    {
+      if (std::fabs(outputL[i] - outputR[i]) > 0.01f)
+      {
+        channelsDifferent = true;
+        break;
+      }
+    }
+    T_ASSERT(ctx, channelsDifferent);
+  }
+
+  void test_lowpass_state_validity_check(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(44100.0f);
+    filter.setCutoff(1000.0f);
+    filter.setResonance(0.5f);
+    filter.reset();
+
+    // State should be valid after reset
+    T_ASSERT(ctx, filter.isStateValid());
+
+    // Process normal samples
+    for (int i = 0; i < 100; ++i)
+    {
+      filter.processSample(std::sin(2.0f * 3.14159265f * 440.0f * i / 44100.0f));
+    }
+
+    // State should still be valid
+    T_ASSERT(ctx, filter.isStateValid());
+  }
+
+  void test_lowpass_denormal_protection(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(44100.0f);
+    filter.setCutoff(100.0f);
+    filter.setResonance(0.0f);
+    filter.reset();
+
+    // Feed extremely small values that could cause denormals
+    for (int i = 0; i < 1000; ++i)
+    {
+      float out = filter.processSample(1e-25f);
+      T_ASSERT(ctx, std::isfinite(out));
+    }
+
+    // State should remain valid (no denormal corruption)
+    T_ASSERT(ctx, filter.isStateValid());
+  }
+
+  void test_lowpass_extreme_parameters(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(192000.0f); // High sample rate
+    
+    // Test extremely low cutoff
+    filter.setCutoff(20.0f);
+    filter.setResonance(0.5f);
+    filter.reset();
+
+    for (int i = 0; i < 500; ++i)
+    {
+      float out = filter.processSample(std::sin(2.0f * 3.14159265f * 50.0f * i / 192000.0f));
+      T_ASSERT(ctx, std::isfinite(out));
+    }
+
+    // Test very high cutoff (near Nyquist)
+    filter.setCutoff(80000.0f); // Will be clamped
+    filter.setResonance(0.0f);
+    filter.reset();
+
+    for (int i = 0; i < 500; ++i)
+    {
+      float out = filter.processSample(std::sin(2.0f * 3.14159265f * 1000.0f * i / 192000.0f));
+      T_ASSERT(ctx, std::isfinite(out));
+    }
+
+    T_ASSERT(ctx, filter.isStateValid());
+  }
+
+  void test_lowpass_sample_rate_changes(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    const float cutoff = 1000.0f;
+    filter.setCutoff(cutoff);
+    filter.setResonance(0.5f);
+
+    // Test different sample rates
+    const float sampleRates[] = {44100.0f, 48000.0f, 96000.0f, 192000.0f};
+    
+    for (float sr : sampleRates)
+    {
+      filter.setSampleRate(sr);
+      filter.reset();
+      
+      T_ASSERT_NEAR(ctx, filter.getSampleRate(), sr, 0.1f);
+      T_ASSERT_NEAR(ctx, filter.getCutoff(), cutoff, 1.0f);
+      
+      // Process samples to verify stability
+      bool stable = true;
+      for (int i = 0; i < 1000; ++i)
+      {
+        float out = filter.processSample(std::sin(2.0f * 3.14159265f * 500.0f * i / sr));
+        if (!std::isfinite(out) || std::fabs(out) > 10.0f)
+        {
+          stable = false;
+          break;
+        }
+      }
+      T_ASSERT(ctx, stable);
+    }
+  }
+
+  void test_lowpass_continuity_on_parameter_change(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(48000.0f);
+    filter.setCutoff(1000.0f);
+    filter.setResonance(0.3f);
+    filter.reset();
+
+    // Process some samples
+    std::vector<float> outputs;
+    for (int i = 0; i < 200; ++i)
+    {
+      float in = std::sin(2.0f * 3.14159265f * 600.0f * i / 48000.0f);
+      float out = filter.processSample(in);
+      outputs.push_back(out);
+    }
+
+    // Change cutoff mid-stream
+    filter.setCutoff(1500.0f);
+
+    // Continue processing - should not produce discontinuities
+    float prevOut = outputs.back();
+    bool continuous = true;
+    for (int i = 0; i < 200; ++i)
+    {
+      float in = std::sin(2.0f * 3.14159265f * 600.0f * (i + 200) / 48000.0f);
+      float out = filter.processSample(in);
+      
+      // Check for discontinuity (large jump)
+      if (std::fabs(out - prevOut) > 2.0f)
+      {
+        continuous = false;
+        break;
+      }
+      prevOut = out;
+    }
+
+    T_ASSERT(ctx, continuous);
+  }
+
+  void test_lowpass_impulse_response(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(44100.0f);
+    filter.setCutoff(1000.0f);
+    filter.setResonance(0.0f); // No resonance for clean decay
+    filter.reset();
+
+    // Apply impulse
+    float out = filter.processSample(1.0f);
+    T_ASSERT(ctx, out > 0.0f);
+
+    // Response should decay over time
+    float prev = out;
+    bool decaying = true;
+    int decayCount = 0;
+    
+    for (int i = 0; i < 500; ++i)
+    {
+      out = filter.processSample(0.0f);
+      
+      // Should generally decay (allowing for small oscillations)
+      if (std::fabs(out) < std::fabs(prev))
+      {
+        decayCount++;
+      }
+      
+      if (i > 10 && std::fabs(out) > std::fabs(prev) * 2.0f)
+      {
+        decaying = false;
+        break;
+      }
+      prev = out;
+    }
+
+    T_ASSERT(ctx, decaying);
+    T_ASSERT(ctx, decayCount > 400); // Most samples should show decay
+    T_ASSERT(ctx, std::fabs(out) < 0.01f); // Should decay to near zero
+  }
+
+  void test_lowpass_performance_benchmark(TestContext &ctx)
+  {
+    using ShortwavDSP::MoogLowPassFilter;
+
+    MoogLowPassFilter filter;
+    filter.setSampleRate(48000.0f);
+    filter.setCutoff(1500.0f);
+    filter.setResonance(0.7f);
+    filter.reset();
+
+    // Benchmark buffer processing
+    const size_t bufferSize = 512;
+    const int iterations = 1000;
+    std::vector<float> input(bufferSize);
+    std::vector<float> output(bufferSize);
+
+    // Generate input
+    for (size_t i = 0; i < bufferSize; ++i)
+    {
+      input[i] = std::sin(2.0f * 3.14159265f * 1000.0f * i / 48000.0f);
+    }
+
+    // Process multiple iterations
+    for (int iter = 0; iter < iterations; ++iter)
+    {
+      filter.processBuffer(input.data(), output.data(), bufferSize);
+    }
+
+    // Verify output is valid (benchmark sanity check)
+    bool allFinite = true;
+    for (size_t i = 0; i < bufferSize; ++i)
+    {
+      if (!std::isfinite(output[i]))
+      {
+        allFinite = false;
+        break;
+      }
+    }
+    T_ASSERT(ctx, allFinite);
+    T_ASSERT(ctx, filter.isStateValid());
+  }
+
   // Entry point to run all tests when this TU is built as a standalone test binary.
   // In normal plugin builds this file is not included.
 } // namespace
@@ -1514,6 +2141,27 @@ int main()
   ::test_threebandeq_reset_behavior(ctx);
   ::test_threebandeq_phase_continuity(ctx);
   ::test_threebandeq_performance_benchmark(ctx);
+
+  // MoogLowPassFilter
+  ::test_lowpass_basic_construction_and_defaults(ctx);
+  ::test_lowpass_parameter_clamping(ctx);
+  ::test_lowpass_reset_clears_state(ctx);
+  ::test_lowpass_silence_produces_silence(ctx);
+  ::test_lowpass_dc_offset_preservation(ctx);
+  ::test_lowpass_frequency_response_low_freq(ctx);
+  ::test_lowpass_frequency_response_high_freq(ctx);
+  ::test_lowpass_resonance_peak_effect(ctx);
+  ::test_lowpass_self_oscillation(ctx);
+  ::test_lowpass_buffer_processing(ctx);
+  ::test_lowpass_inplace_processing(ctx);
+  ::test_lowpass_stereo_processing(ctx);
+  ::test_lowpass_state_validity_check(ctx);
+  ::test_lowpass_denormal_protection(ctx);
+  ::test_lowpass_extreme_parameters(ctx);
+  ::test_lowpass_sample_rate_changes(ctx);
+  ::test_lowpass_continuity_on_parameter_change(ctx);
+  ::test_lowpass_impulse_response(ctx);
+  ::test_lowpass_performance_benchmark(ctx);
 
   ctx.summary();
   return (ctx.failed == 0) ? 0 : 1;
