@@ -72,6 +72,7 @@ public:
     slideParam_ = 0.0f;
     organizeParam_ = 0.0f;
     variSpeedParam_ = 0.5f;
+    overdubMode_ = false;  // Reset to default (replace mode)
   }
 
   //--------------------------------------------------------------------------
@@ -92,6 +93,17 @@ public:
   void setVariSpeed(float speed) noexcept
   {
     variSpeedParam_ = TapestryUtil::clamp01(speed);
+  }
+
+  // Overdub mode: 0 = replace (clear buffer on record), 1 = overdub (keep existing)
+  void setOverdubMode(bool overdub) noexcept
+  {
+    overdubMode_ = overdub;
+  }
+
+  bool getOverdubMode() const noexcept
+  {
+    return overdubMode_;
   }
 
   // CV inputs with attenuverters
@@ -149,7 +161,8 @@ public:
       if (recordState_.mode == RecordState::Mode::Idle)
       {
         // Start recording on clock
-        startRecording(pendingRecordMode_);
+        startRecording(pendingRecordMode_, pendingRecordPosition_);
+        pendingRecordPosition_ = 0;
       }
       else
       {
@@ -208,21 +221,28 @@ public:
   }
 
   // Clear buffer and start fresh recording (replaces existing content)
-  void clearAndStartRecording(bool clockSync = false) noexcept
+  // If overdub mode is enabled, this skips the clear and just starts recording
+  // currentPosition: where to start recording in overdub mode (typically current playhead)
+  void clearAndStartRecording(bool clockSync = false, size_t currentPosition = 0) noexcept
   {
-    // Clear existing buffer and splices
-    buffer_.clear();
-    spliceManager_.clear();
+    if (!overdubMode_)
+    {      // Replace mode: Clear existing buffer and splices
+      buffer_.clear();
+      spliceManager_.clear();
+      currentPosition = 0; // Always start from 0 in replace mode
+    }
+    // If overdub mode is on and buffer has content, start recording at current position
     
-    // Start fresh recording
+    // Start recording
     if (clockSync)
     {
       pendingRecordMode_ = RecordState::Mode::SameSplice;
+      pendingRecordPosition_ = currentPosition;
       recordState_.waitingForClock = true;
     }
     else
     {
-      startRecording(RecordState::Mode::SameSplice);
+      startRecording(RecordState::Mode::SameSplice, currentPosition);
     }
   }
 
@@ -580,6 +600,11 @@ private:
 
   void startRecording(RecordState::Mode mode) noexcept
   {
+    startRecording(mode, 0);
+  }
+
+  void startRecording(RecordState::Mode mode, size_t overdubPosition) noexcept
+  {
     // Track if this is a new recording into a freshly created splice
     recordState_.isInitialRecording = false;
     
@@ -589,9 +614,19 @@ private:
       const SpliceMarker *splice = spliceManager_.getCurrentSplice();
       if (splice && splice->isValid() && buffer_.getUsedFrames() > 0)
       {
-        // Overdub mode: loop within existing splice bounds
-        recordState_.recordPosition = splice->startFrame;
-        recordState_.recordStartFrame = splice->startFrame;
+        // Overdub mode: start at specified position (or splice start if position is 0)
+        if (overdubPosition > 0 && overdubMode_)
+        {
+          // Start recording from current playhead position
+          recordState_.recordPosition = overdubPosition;
+          recordState_.recordStartFrame = splice->startFrame;
+        }
+        else
+        {
+          // Normal mode: loop within existing splice bounds from start
+          recordState_.recordPosition = splice->startFrame;
+          recordState_.recordStartFrame = splice->startFrame;
+        }
       }
       else
       {
@@ -681,11 +716,24 @@ private:
       else
       {
         // Overdub mode: Sound-on-Sound recording into current splice
-        // sosAmount controls wet/dry of what we're recording:
-        // 0 = record live input over existing (replace)
-        // 1 = keep existing loop content (no new recording)
-        // 0.5 = blend 50/50
-        buffer_.mixAndWrite(recordState_.recordPosition, liveL, liveR, sosAmount);
+        if (overdubMode_)
+        {
+          // True overdub: ADD new audio to existing (ignore SOS parameter)
+          float existingL, existingR;
+          buffer_.readStereo(recordState_.recordPosition, existingL, existingR);
+          buffer_.writeStereo(recordState_.recordPosition, 
+                            existingL + liveL, 
+                            existingR + liveR);
+        }
+        else
+        {
+          // Traditional SOS: blend based on sosAmount parameter
+          // sosAmount controls wet/dry of what we're recording:
+          // 0 = record live input over existing (replace)
+          // 1 = keep existing loop content (no new recording)
+          // 0.5 = blend 50/50
+          buffer_.mixAndWrite(recordState_.recordPosition, liveL, liveR, sosAmount);
+        }
         recordState_.recordPosition++;
         
         // Loop within current splice bounds
@@ -722,6 +770,7 @@ private:
   PlaybackState playbackState_;
   RecordState recordState_;
   RecordState::Mode pendingRecordMode_ = RecordState::Mode::Idle;
+  size_t pendingRecordPosition_ = 0;
   ModuleMode moduleMode_ = ModuleMode::Normal;
 
   VariSpeedState variSpeedState_;
@@ -757,6 +806,9 @@ private:
   float autoLevelPeak_ = 0.0f;
   float autoLevelAttack_ = 0.0f;
   float autoLevelRelease_ = 0.0f;
+
+  // Overdub mode
+  bool overdubMode_ = false;  // Default OFF: replace existing content
 };
 
 } // namespace ShortwavDSP

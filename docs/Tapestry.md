@@ -58,10 +58,22 @@ The module integrates three core DSP components:
 - **Behavior**:
   - Press once → start recording (button lights up)
   - Record into current splice position
-  - New recording session clears existing buffer content
+  - Buffer clearing depends on OVERDUB_TOGGLE state (see below)
   - Automatic splice creation when first input arrives
   - Recording stops at splice boundary or when button pressed again
 - **Audio Routing**: Sums L/R inputs, records mono into buffer
+
+#### OVERDUB_TOGGLE (Range: 0-1)
+- **Type**: Toggle switch (CKSS)
+- **Default**: 0 (OFF - Replace mode)
+- **Function**: Controls recording buffer behavior
+- **Modes**:
+  - **OFF (0)**: Replace mode - `clearAndStartRecording()` clears existing buffer content before recording. This is the traditional behavior for starting a fresh recording.
+  - **ON (1)**: Overdub mode - `clearAndStartRecording()` preserves existing buffer content. New audio is layered/merged with what's already recorded, allowing non-destructive multi-take recording.
+- **Use Cases**:
+  - Replace mode: Clean slate for new recordings, single-take performance capture
+  - Overdub mode: Building up layers, adding parts to existing material, loop-based composition
+- **Note**: This only affects the initial buffer clearing behavior. Once recording is active, both modes write audio to the buffer at the current position.
 
 #### PLAY_BUTTON (Range: 0-1)
 - **Type**: Trigger button with gate input
@@ -270,13 +282,15 @@ The module integrates three core DSP components:
 7. Adjust **SLIDE** to explore different positions
 
 ### Live Looping with Overdubs
-1. Record initial phrase (as above)
-2. Press **PLAY** to return to start
-3. Turn **VARISPEED** to play back loop
-4. Press **RECORD** to overdub new material
-5. Recording layers on top of existing content
-6. Use **SPLICE** trigger to mark sections
-7. Navigate with **SHIFT** button
+1. Record initial phrase with **OVERDUB** toggle OFF (replace mode)
+2. Toggle **OVERDUB** switch ON (up position) to enable layering
+3. Press **PLAY** to return to start
+4. Turn **VARISPEED** to play back loop
+5. Press **RECORD** - buffer is preserved, ready for layering
+6. New audio merges with existing content (non-destructive)
+7. Repeat steps 3-6 to build up multiple layers
+8. Use **SPLICE** trigger to mark sections
+9. Navigate with **SHIFT** button
 
 ### Granular Texture Creation
 1. Record source material (sustained tones work well)
@@ -453,7 +467,9 @@ While inspired by the Morphagene, **Tapestry** has some differences:
 ### v2.0.0 (2025-12-19)
 - Initial release
 - Core granular engine with 4-voice overlap
-- Sound-on-sound recording
+- Sound-on-sound recording with overdub toggle
+  - Replace mode (default): clears buffer on new recording
+  - Overdub mode: preserves existing audio for layering
 - Splice management system
 - Waveform display with zoom
 - Full CV control

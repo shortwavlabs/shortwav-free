@@ -16,10 +16,11 @@
 
 ### 1. Record Your First Sound
 1. Set **VARISPEED** to center (stopped - there's a detent)
-2. Press **RECORD** button (it lights up)
-3. Connect audio to **AUDIO L** and/or **AUDIO R** inputs
-4. Play some audio - you'll see it appear in the waveform display
-5. Press **RECORD** again to stop recording
+2. Ensure **OVERDUB** toggle is OFF (down position - default)
+3. Press **RECORD** button (it lights up)
+4. Connect audio to **AUDIO L** and/or **AUDIO R** inputs
+5. Play some audio - you'll see it appear in the waveform display
+6. Press **RECORD** again to stop recording
 
 ### 2. Play It Back
 1. Turn **VARISPEED** right of center to play forward
@@ -51,6 +52,9 @@ Splices are markers that divide your recording into segments:
 
 ### Recording & Playback
 - **RECORD** (button): Start/stop sound-on-sound recording
+- **OVERDUB** (toggle): Recording mode selector
+  - OFF (down) = Replace mode (clears buffer on new recording)
+  - ON (up) = Overdub mode (preserves existing audio)
 - **PLAY** (button + gate): Retrigger playback from splice start
 - **VARISPEED** (knob + CV): Playback speed/direction
   - Center = stopped
@@ -80,12 +84,21 @@ Splices are markers that divide your recording into segments:
 3. Turn **VARISPEED** to loop continuously
 4. No splices needed for simple looping
 
-### Overdubbing
-1. Record initial material
+### Overdubbing (Two Methods)
+
+**Method 1: Replace Mode (default)**
+1. Record initial material with **OVERDUB** toggle OFF
 2. Press **PLAY** to restart
 3. Turn **VARISPEED** to play back
 4. Press **RECORD** again while playing
-5. New audio layers on top of existing
+5. New audio overwrites at current position
+
+**Method 2: Overdub Mode (layering)**
+1. Record initial material
+2. Toggle **OVERDUB** switch ON (up position)
+3. Press **RECORD** to start new recording
+4. Buffer is preserved - new audio merges with existing
+5. Create multiple layers without clearing previous takes
 
 ### Splice-Based Navigation
 1. Record longer audio (10-30 seconds)

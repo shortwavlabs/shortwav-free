@@ -7,6 +7,9 @@
 
 void Tapestry::process(const ProcessArgs& args)
 {
+  // Read overdub toggle FIRST (before button processing needs it)
+  dsp.setOverdubMode(params[OVERDUB_TOGGLE].getValue() > 0.5f);
+
   // Process button inputs
   processButtons(args);
   processButtonCombos(args);
@@ -147,8 +150,10 @@ void Tapestry::processButtons(const ProcessArgs& args)
         else
         {
           // Clear and start fresh recording (replaces existing content)
+          // In overdub mode, start from current playhead position
           bool clockSync = inputs[CLK_INPUT].isConnected();
-          dsp.clearAndStartRecording(clockSync);
+          size_t currentPos = static_cast<size_t>(dsp.getGrainEngine().getPlayheadPosition());
+          dsp.clearAndStartRecording(clockSync, currentPos);
         }
       }
     }
@@ -329,8 +334,10 @@ void Tapestry::processGateInputs(const ProcessArgs& args)
       }
       else
       {
-        // Clear and start fresh recording
-        dsp.clearAndStartRecording(false);
+        // Clear and start fresh recording (replaces existing content)
+        // In overdub mode, start from current playhead position
+        size_t currentPos = static_cast<size_t>(dsp.getGrainEngine().getPlayheadPosition());
+        dsp.clearAndStartRecording(false, currentPos);
       }
     }
   }
@@ -959,6 +966,9 @@ TapestryWidget::TapestryWidget(Tapestry* module)
 
   addParam(createParamCentered<LEDButton>(Vec(165, yPos), module, Tapestry::SHIFT_BUTTON));
   addChild(createLightCentered<MediumLight<GreenLight>>(Vec(165, yPos), module, Tapestry::SHIFT_LED));
+
+  // Overdub toggle switch (small switch near record button)
+  addParam(createParamCentered<CKSS>(Vec(60, yPos), module, Tapestry::OVERDUB_TOGGLE));
 }
 
 void TapestryWidget::appendContextMenu(Menu* menu)

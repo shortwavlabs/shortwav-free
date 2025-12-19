@@ -1224,6 +1224,119 @@ void test_dsp_clear_operations(TestContext &ctx)
   T_ASSERT(ctx, dsp.getSpliceManager().isEmpty());
 }
 
+void test_dsp_overdub_mode_default_off(TestContext &ctx)
+{
+  using ShortwavDSP::TapestryDSP;
+
+  TapestryDSP dsp;
+  dsp.setSampleRate(48000.0f);
+
+  // Overdub mode should default to off
+  T_ASSERT(ctx, !dsp.getOverdubMode());
+}
+
+void test_dsp_overdub_mode_toggle(TestContext &ctx)
+{
+  using ShortwavDSP::TapestryDSP;
+
+  TapestryDSP dsp;
+  dsp.setSampleRate(48000.0f);
+
+  // Toggle on
+  dsp.setOverdubMode(true);
+  T_ASSERT(ctx, dsp.getOverdubMode());
+
+  // Toggle off
+  dsp.setOverdubMode(false);
+  T_ASSERT(ctx, !dsp.getOverdubMode());
+}
+
+void test_dsp_overdub_mode_replace_behavior(TestContext &ctx)
+{
+  using ShortwavDSP::TapestryDSP;
+
+  TapestryDSP dsp;
+  dsp.setSampleRate(48000.0f);
+
+  // Record some initial data
+  dsp.clearAndStartRecording(false);
+  for (int i = 0; i < 100; i++)
+  {
+    dsp.process(0.5f, 0.5f);
+  }
+  dsp.stopRecordingRequest(false);
+
+  T_ASSERT(ctx, dsp.getBuffer().getUsedFrames() == 100);
+
+  // With overdub mode OFF (default), clearAndStartRecording clears buffer
+  dsp.setOverdubMode(false);
+  dsp.clearAndStartRecording(false);
+
+  // Buffer should be cleared after starting new recording
+  T_ASSERT(ctx, dsp.getBuffer().getUsedFrames() == 0);
+
+  // Record new data
+  for (int i = 0; i < 50; i++)
+  {
+    dsp.process(0.8f, 0.8f);
+  }
+  dsp.stopRecordingRequest(false);
+
+  // Should only have new data
+  T_ASSERT(ctx, dsp.getBuffer().getUsedFrames() == 50);
+}
+
+void test_dsp_overdub_mode_keep_existing(TestContext &ctx)
+{
+  using ShortwavDSP::TapestryDSP;
+
+  TapestryDSP dsp;
+  dsp.setSampleRate(48000.0f);
+
+  // Record some initial data
+  dsp.clearAndStartRecording(false);
+  for (int i = 0; i < 100; i++)
+  {
+    dsp.process(0.5f, 0.5f);
+  }
+  dsp.stopRecordingRequest(false);
+
+  T_ASSERT(ctx, dsp.getBuffer().getUsedFrames() == 100);
+
+  // With overdub mode ON, clearAndStartRecording should NOT clear buffer
+  dsp.setOverdubMode(true);
+  dsp.clearAndStartRecording(false);
+
+  // Buffer should still have existing data
+  T_ASSERT(ctx, dsp.getBuffer().getUsedFrames() == 100);
+
+  // Record more data (overwrites at current position, but buffer is preserved)
+  for (int i = 0; i < 50; i++)
+  {
+    dsp.process(0.8f, 0.8f);
+  }
+  dsp.stopRecordingRequest(false);
+
+  // Should still have original 100 frames (recording overwrites but doesn't extend in same splice mode)
+  T_ASSERT(ctx, dsp.getBuffer().getUsedFrames() >= 100);
+}
+
+void test_dsp_overdub_mode_reset(TestContext &ctx)
+{
+  using ShortwavDSP::TapestryDSP;
+
+  TapestryDSP dsp;
+  dsp.setSampleRate(48000.0f);
+
+  // Set overdub mode on
+  dsp.setOverdubMode(true);
+  T_ASSERT(ctx, dsp.getOverdubMode());
+
+  // Reset should turn overdub mode off
+  dsp.reset();
+  T_ASSERT(ctx, !dsp.getOverdubMode());
+}
+
 //------------------------------------------------------------------------------
 // Edge case and stress tests
 //------------------------------------------------------------------------------
@@ -1376,6 +1489,13 @@ void run_all_tapestry_tests()
   test_dsp_slide_parameter(ctx);
   test_dsp_gene_size_parameter(ctx);
   test_dsp_clear_operations(ctx);
+
+  std::printf("--- Overdub Mode Tests ---\n");
+  test_dsp_overdub_mode_default_off(ctx);
+  test_dsp_overdub_mode_toggle(ctx);
+  test_dsp_overdub_mode_replace_behavior(ctx);
+  test_dsp_overdub_mode_keep_existing(ctx);
+  test_dsp_overdub_mode_reset(ctx);
 
   std::printf("--- Edge Cases and Stress Tests ---\n");
   test_edge_empty_splice(ctx);

@@ -49,6 +49,9 @@ struct Tapestry : Module
     SPLICE_BUTTON,
     SHIFT_BUTTON,
 
+    // Toggles
+    OVERDUB_TOGGLE,    // Overdub mode: 0 = replace, 1 = overdub
+
     NUM_PARAMS
   };
 
@@ -202,6 +205,10 @@ struct Tapestry : Module
     configButton(REC_BUTTON, "Record");
     configButton(SPLICE_BUTTON, "Splice");
     configButton(SHIFT_BUTTON, "Shift");
+
+    // Toggles
+    configSwitch(OVERDUB_TOGGLE, 0.0f, 1.0f, 0.0f, "Overdub Mode",
+                 {"Replace (clear on record)", "Overdub (keep existing)"});
 
     // Audio inputs
     configInput(AUDIO_IN_L, "Audio L");
