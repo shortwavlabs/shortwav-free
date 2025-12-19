@@ -173,7 +173,15 @@ public:
       spliceManager_.shiftImmediate();
       
       // Retrigger the grain engine at new splice position
+      // This also works when stopped - it sets up the position for when playback resumes
       grainEngine_.retrigger(slideParam_);
+      
+      // Reset playhead to start of new splice for visual feedback
+      const SpliceMarker* newSplice = spliceManager_.getCurrentSplice();
+      if (newSplice)
+      {
+        grainEngine_.setAbsolutePosition(static_cast<double>(newSplice->startFrame));
+      }
     }
   }
 

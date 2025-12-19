@@ -138,14 +138,15 @@ public:
     // Calculate slide offset within splice
     float slideOffset = slide_ * static_cast<float>(spliceLength - geneSamples);
 
-    // Update absolute position for splice marker creation
-    updateAbsolutePosition(spliceStart, slideOffset);
-
     // Get playback speed (can be negative for reverse)
     float speed = variSpeedState_.speedRatio * sampleRateRatio_;
+    
+    // Update absolute position based on slide (even when stopped, for splice creation)
+    updateAbsolutePosition(spliceStart, slideOffset, spliceLength);
+    
     if (variSpeedState_.isStopped)
     {
-      // Output silence when stopped
+      // When stopped, update position based on slide but output silence
       return false;
     }
 
@@ -203,6 +204,13 @@ public:
       voice.position += speed * pitchMod;
       voice.phase += std::fabs(speed) / geneSamples;
 
+      // Wrap voice.position to prevent unbounded growth
+      // This keeps it synchronized with the actual read position
+      while (voice.position < 0.0)
+        voice.position += static_cast<double>(spliceLength);
+      while (voice.position >= static_cast<double>(spliceLength))
+        voice.position -= static_cast<double>(spliceLength);
+
       // Check if voice reached end of gene
       if (voice.phase >= 1.0f)
       {
@@ -243,11 +251,33 @@ public:
     return lastAbsolutePosition_;
   }
 
+  // Set absolute position directly (for visual feedback when stopped)
+  void setAbsolutePosition(double pos) noexcept
+  {
+    lastAbsolutePosition_ = pos;
+    // Also reset the relative position so they stay in sync
+    grainStartPosition_ = 0.0;
+    for (auto& voice : voices_)
+    {
+      voice.position = 0.0;
+    }
+  }
+
   // Update the last known absolute position (call from process when we know splice bounds)
-  void updateAbsolutePosition(size_t spliceStart, float slideOffset) noexcept
+  void updateAbsolutePosition(size_t spliceStart, float slideOffset, size_t spliceLength) noexcept
   {
     double relPos = getPlayheadPositionRelative();
-    lastAbsolutePosition_ = static_cast<double>(spliceStart) + slideOffset + relPos;
+    double absPos = static_cast<double>(spliceStart) + slideOffset + relPos;
+    
+    // Wrap to splice bounds to prevent display issues
+    double minPos = static_cast<double>(spliceStart);
+    double maxPos = static_cast<double>(spliceStart + spliceLength);
+    while (absPos < minPos)
+      absPos += static_cast<double>(spliceLength);
+    while (absPos >= maxPos)
+      absPos -= static_cast<double>(spliceLength);
+    
+    lastAbsolutePosition_ = absPos;
   }
 
   // Retrigger playback from start (Play input)

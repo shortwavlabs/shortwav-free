@@ -825,7 +825,14 @@ void ReelDisplay::drawPlayhead(const DrawArgs& args)
   size_t usedFrames = buffer.getUsedFrames();
   double playhead = module->dsp.getGrainEngine().getPlayheadPosition();
 
+  // Clamp playhead to valid range
+  if (playhead < 0.0)
+    playhead = 0.0;
+  if (playhead >= static_cast<double>(usedFrames))
+    playhead = static_cast<double>(usedFrames) - 1.0;
+
   float x = static_cast<float>(playhead / usedFrames) * box.size.x;
+  x = std::max(0.0f, std::min(x, box.size.x));
 
   nvgBeginPath(args.vg);
   nvgMoveTo(args.vg, x, 0);
