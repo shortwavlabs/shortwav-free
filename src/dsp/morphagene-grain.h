@@ -196,9 +196,9 @@ public:
       outL += sampleL;
       outR += sampleR;
 
-      // Advance voice position
-      voice.position += std::fabs(speed) * pitchMod;
-      voice.phase += 1.0f / geneSamples;
+      // Advance voice position (speed can be negative for reverse playback)
+      voice.position += speed * pitchMod;
+      voice.phase += std::fabs(speed) / geneSamples;
 
       // Check if voice reached end of gene
       if (voice.phase >= 1.0f)
