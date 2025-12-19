@@ -48,6 +48,7 @@ struct Tapestry : Module
     REC_BUTTON,
     SPLICE_BUTTON,
     SHIFT_BUTTON,
+    CLEAR_SPLICES_BUTTON,  // Clear all splices
 
     // Toggles
     OVERDUB_TOGGLE,    // Overdub mode: 0 = replace, 1 = overdub
@@ -114,6 +115,7 @@ struct Tapestry : Module
     REC_LED,
     SPLICE_LED,
     SHIFT_LED,
+    CLEAR_SPLICES_LED,
 
     NUM_LIGHTS
   };
@@ -148,6 +150,7 @@ struct Tapestry : Module
   bool recButtonHeld = false;
   bool spliceButtonHeld = false;
   bool shiftButtonHeld = false;
+  bool clearSplicesButtonHeld = false;
 
   static constexpr float kLongPressTime = 3.0f;      // 3 seconds for delete all
   static constexpr float kComboWindowTime = 0.3f;    // 300ms combo detection
@@ -205,6 +208,7 @@ struct Tapestry : Module
     configButton(REC_BUTTON, "Record");
     configButton(SPLICE_BUTTON, "Splice");
     configButton(SHIFT_BUTTON, "Shift");
+    configButton(CLEAR_SPLICES_BUTTON, "Clear Splices");
 
     // Toggles
     configSwitch(OVERDUB_TOGGLE, 0.0f, 1.0f, 0.0f, "Overdub Mode",

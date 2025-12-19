@@ -75,6 +75,7 @@ Splices are markers that divide your recording into segments:
 - **SHIFT** (button + gate): Jump to next splice immediately
 - **ORGANIZE** (knob): Manual splice selection (smooth)
 - **SPLICE** (button + gate): Create splice at current position
+- **CLEAR SPLICES** (button): Remove all splice markers instantly
 
 ## Common Workflows
 
@@ -106,6 +107,7 @@ Splices are markers that divide your recording into segments:
 3. Set **VARISPEED** to stopped (center)
 4. Use **SHIFT** button to jump between splices
 5. Each splice plays as isolated section
+6. Press **CLEAR SPLICES** to remove all markers and start over
 
 ### Granular Clouds
 1. Record sustained tones or pads
@@ -154,9 +156,11 @@ Splices are markers that divide your recording into segments:
 
 ### Context Menu (right-click)
 - **Clear Tape**: Erase all audio
-- **Clear All Splices**: Remove all markers
+- **Clear All Splices**: Remove all markers (same as Clear Splices button)
 - **Remove Last Splice**: Undo last splice
 - **Tape Info**: View buffer status
+
+**Tip**: Use the dedicated **CLEAR SPLICES** button for quick access!
 
 ## Quick Patch Ideas
 

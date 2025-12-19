@@ -209,6 +209,18 @@ void Tapestry::processButtons(const ProcessArgs& args)
   {
     shiftButtonHeld = false;
   }
+
+  // CLEAR SPLICES button - single press to clear all splices
+  bool clearSplicesPressed = params[CLEAR_SPLICES_BUTTON].getValue() > 0.5f;
+  if (clearSplicesPressed && !clearSplicesButtonHeld)
+  {
+    clearSplicesButtonHeld = true;
+    dsp.deleteAllMarkers();
+  }
+  else if (!clearSplicesPressed)
+  {
+    clearSplicesButtonHeld = false;
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -525,6 +537,9 @@ void Tapestry::updateLights(const ProcessArgs& args)
     // Dim when only one splice (shift not available)
     lights[SHIFT_LED].setBrightness(0.2f);
   }
+
+  // Clear Splices LED: dim when splices exist, off when empty
+  lights[CLEAR_SPLICES_LED].setBrightness(dsp.getSpliceManager().isEmpty() ? 0.0f : 0.3f);
 }
 
 //------------------------------------------------------------------------------
@@ -967,8 +982,12 @@ TapestryWidget::TapestryWidget(Tapestry* module)
   addParam(createParamCentered<LEDButton>(Vec(165, yPos), module, Tapestry::SHIFT_BUTTON));
   addChild(createLightCentered<MediumLight<GreenLight>>(Vec(165, yPos), module, Tapestry::SHIFT_LED));
 
+  // Clear Splices button to the right
+  addParam(createParamCentered<LEDButton>(Vec(200, yPos), module, Tapestry::CLEAR_SPLICES_BUTTON));
+  addChild(createLightCentered<MediumLight<WhiteLight>>(Vec(200, yPos), module, Tapestry::CLEAR_SPLICES_LED));
+
   // Overdub toggle switch (small switch near record button)
-  addParam(createParamCentered<CKSS>(Vec(60, yPos), module, Tapestry::OVERDUB_TOGGLE));
+  addParam(createParamCentered<CKSS>(Vec(60, 365), module, Tapestry::OVERDUB_TOGGLE));
 }
 
 void TapestryWidget::appendContextMenu(Menu* menu)

@@ -1337,6 +1337,80 @@ void test_dsp_overdub_mode_reset(TestContext &ctx)
   T_ASSERT(ctx, !dsp.getOverdubMode());
 }
 
+void test_dsp_clear_all_markers(TestContext &ctx)
+{
+  using ShortwavDSP::TapestryDSP;
+
+  TapestryDSP dsp;
+  dsp.setSampleRate(48000.0f);
+
+  // Record some audio
+  dsp.clearAndStartRecording(false);
+  for (int i = 0; i < 1000; i++)
+  {
+    dsp.process(0.5f, 0.5f);
+  }
+  dsp.stopRecordingRequest(false);
+
+  // Create multiple splices
+  dsp.onSpliceTrigger(250);
+  dsp.onSpliceTrigger(500);
+  dsp.onSpliceTrigger(750);
+
+  T_ASSERT(ctx, dsp.getSpliceManager().getNumSplices() == 4);
+
+  // Clear all markers
+  dsp.deleteAllMarkers();
+
+  // Should have single splice covering entire buffer
+  T_ASSERT(ctx, dsp.getSpliceManager().getNumSplices() == 1);
+  T_ASSERT(ctx, dsp.getSpliceManager().getCurrentIndex() == 0);
+  T_ASSERT(ctx, dsp.getBuffer().getUsedFrames() == 1000); // Audio preserved
+}
+
+void test_dsp_clear_markers_preserves_audio(TestContext &ctx)
+{
+  using ShortwavDSP::TapestryDSP;
+
+  TapestryDSP dsp;
+  dsp.setSampleRate(48000.0f);
+
+  // Record data
+  dsp.clearAndStartRecording(false);
+  for (int i = 0; i < 500; i++)
+  {
+    dsp.process(0.8f, 0.8f);
+  }
+  dsp.stopRecordingRequest(false);
+
+  size_t framesBeforeClear = dsp.getBuffer().getUsedFrames();
+  T_ASSERT(ctx, framesBeforeClear == 500);
+
+  // Add splices
+  dsp.onSpliceTrigger(250);
+  T_ASSERT(ctx, dsp.getSpliceManager().getNumSplices() == 2);
+
+  // Clear markers
+  dsp.deleteAllMarkers();
+
+  // Audio should be preserved
+  T_ASSERT(ctx, dsp.getBuffer().getUsedFrames() == framesBeforeClear);
+  T_ASSERT(ctx, !dsp.getBuffer().isEmpty());
+}
+
+void test_dsp_clear_markers_empty_buffer(TestContext &ctx)
+{
+  using ShortwavDSP::TapestryDSP;
+
+  TapestryDSP dsp;
+  dsp.setSampleRate(48000.0f);
+
+  // Clear markers on empty buffer should not crash
+  T_ASSERT(ctx, dsp.getBuffer().isEmpty());
+  dsp.deleteAllMarkers();
+  T_ASSERT(ctx, dsp.getSpliceManager().isEmpty());
+}
+
 //------------------------------------------------------------------------------
 // Edge case and stress tests
 //------------------------------------------------------------------------------
@@ -1496,6 +1570,11 @@ void run_all_tapestry_tests()
   test_dsp_overdub_mode_replace_behavior(ctx);
   test_dsp_overdub_mode_keep_existing(ctx);
   test_dsp_overdub_mode_reset(ctx);
+
+  std::printf("--- Clear Markers Tests ---\n");
+  test_dsp_clear_all_markers(ctx);
+  test_dsp_clear_markers_preserves_audio(ctx);
+  test_dsp_clear_markers_empty_buffer(ctx);
 
   std::printf("--- Edge Cases and Stress Tests ---\n");
   test_edge_empty_splice(ctx);

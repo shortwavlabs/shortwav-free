@@ -176,6 +176,18 @@ The module integrates three core DSP components:
   - Visual feedback: new marker appears in waveform display
 - **Use Case**: Marking interesting moments, creating rhythmic divisions
 
+#### CLEAR_SPLICES_BUTTON (Range: 0-1)
+- **Type**: Momentary button with LED indicator
+- **Function**: Remove all splice markers from the tape
+- **Behavior**:
+  - Single button press → deletes all splices
+  - Buffer content is preserved (audio not affected)
+  - Creates single splice spanning entire used buffer
+  - Resets current splice index to 0
+  - LED: dim when splices exist, off when empty
+- **Use Case**: Quick reset of splice structure, starting fresh navigation
+- **Note**: Same as "Clear All Splices" in context menu
+
 ---
 
 ## Inputs
@@ -264,9 +276,15 @@ The module integrates three core DSP components:
 
 ### Context Menu
 - **Clear Tape**: Erase all recorded audio and reset splices
-- **Clear All Splices**: Remove all splice markers (keeps audio)
+- **Clear All Splices**: Remove all splice markers (keeps audio, same as Clear Splices button)
 - **Remove Last Splice**: Delete most recently created splice
 - **Tape Info**: Display buffer status and recording time
+
+### Button Controls
+- **Clear Splices Button**: Dedicated button with white LED indicator for quick splice clearing
+  - LED dim (0.3 brightness) when splices exist
+  - LED off when no splices or empty buffer
+  - Provides instant visual feedback of splice structure state
 
 ---
 
