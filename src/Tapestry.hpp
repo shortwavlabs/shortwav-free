@@ -165,6 +165,10 @@ struct Tapestry : Module
   std::string currentFileName;
   std::mutex fileMutex;
 
+  // Pending splice data from JSON deserialization
+  std::vector<size_t> pendingSpliceMarkers_;
+  int pendingSpliceIndex_ = -1;
+
   //--------------------------------------------------------------------------
   // Reel Management
   //--------------------------------------------------------------------------

@@ -10,6 +10,25 @@ void Tapestry::process(const ProcessArgs& args)
   // Read overdub toggle FIRST (before button processing needs it)
   dsp.setOverdubMode(params[OVERDUB_TOGGLE].getValue() > 0.5f);
 
+  // Apply pending splice markers from JSON deserialization (after file is loaded)
+  if (!pendingSpliceMarkers_.empty() && !fileLoading.load())
+  {
+    size_t totalFrames = dsp.getBuffer().getUsedFrames();
+    if (totalFrames > 0)
+    {
+      dsp.getSpliceManager().setFromMarkerPositions(pendingSpliceMarkers_, totalFrames);
+      
+      // Restore the current splice index
+      if (pendingSpliceIndex_ >= 0)
+      {
+        dsp.getSpliceManager().setCurrentIndex(pendingSpliceIndex_);
+      }
+      
+      pendingSpliceMarkers_.clear();
+      pendingSpliceIndex_ = -1;
+    }
+  }
+
   // Process button inputs
   processButtons(args);
   processButtonCombos(args);
@@ -685,6 +704,21 @@ json_t* Tapestry::dataToJson()
   // Save auto-level gain
   json_object_set_new(rootJ, "autoLevelGain", json_real(dsp.getAutoLevelGain()));
 
+  // Save splice markers
+  std::vector<size_t> markerPositions = dsp.getMarkerPositions();
+  if (!markerPositions.empty())
+  {
+    json_t* markersJ = json_array();
+    for (size_t pos : markerPositions)
+    {
+      json_array_append_new(markersJ, json_integer(pos));
+    }
+    json_object_set_new(rootJ, "spliceMarkers", markersJ);
+  }
+
+  // Save current splice index
+  json_object_set_new(rootJ, "currentSpliceIndex", json_integer(dsp.getSpliceManager().getCurrentIndex()));
+
   return rootJ;
 }
 
@@ -706,6 +740,30 @@ void Tapestry::dataFromJson(json_t* rootJ)
     {
       loadFileAsync(path);
     }
+  }
+
+  // Load splice markers (after file is loaded, this will be applied in process())
+  json_t* markersJ = json_object_get(rootJ, "spliceMarkers");
+  if (markersJ && json_is_array(markersJ))
+  {
+    std::vector<size_t> markerPositions;
+    size_t arraySize = json_array_size(markersJ);
+    for (size_t i = 0; i < arraySize; i++)
+    {
+      json_t* markerJ = json_array_get(markersJ, i);
+      if (json_is_integer(markerJ))
+      {
+        markerPositions.push_back(json_integer_value(markerJ));
+      }
+    }
+    pendingSpliceMarkers_ = markerPositions;
+  }
+
+  // Load current splice index
+  json_t* spliceIndexJ = json_object_get(rootJ, "currentSpliceIndex");
+  if (spliceIndexJ)
+  {
+    pendingSpliceIndex_ = json_integer_value(spliceIndexJ);
   }
 }
 
