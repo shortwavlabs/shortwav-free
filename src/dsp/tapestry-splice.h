@@ -232,21 +232,36 @@ public:
   //--------------------------------------------------------------------------
 
   // Set target splice from Organize parameter (0-1)
-  // Only updates pending if the organize target changed significantly
+  // Applies immediately only when the knob actually moves
   void setOrganize(float param) noexcept
   {
     if (splices_.empty())
     {
       organizeTarget_ = -1;
+      lastOrganizeParam_ = param;
       return;
     }
 
     param = TapestryUtil::clamp01(param);
-    int index = static_cast<int>(param * (splices_.size() - 1) + 0.5f);
-    index = std::min(index, static_cast<int>(splices_.size()) - 1);
+    
+    // Only apply if the organize parameter actually changed significantly
+    // This prevents overriding shift when the knob is just sitting at a position
+    const float kThreshold = 0.01f;  // ~1% change required
+    if (std::fabs(param - lastOrganizeParam_) > kThreshold)
+    {
+      int index = static_cast<int>(param * (splices_.size() - 1) + 0.5f);
+      index = std::min(index, static_cast<int>(splices_.size()) - 1);
 
-    // Store the organize target, but don't override pending from shift
-    organizeTarget_ = index;
+      organizeTarget_ = index;
+      lastOrganizeParam_ = param;
+      
+      // Apply immediately when organize knob is actually moved
+      if (organizeTarget_ != currentIndex_)
+      {
+        currentIndex_ = organizeTarget_;
+        pendingIndex_ = -1;  // Clear any shift pending when user actively moves organize
+      }
+    }
   }
 
   // Apply organize target as pending (called at end of splice if no manual pending)
@@ -269,6 +284,9 @@ public:
     currentIndex_ = nextIndex;
     pendingIndex_ = -1;  // Clear any pending
     organizeTarget_ = currentIndex_;  // Sync organize target to prevent override
+    
+    // Do NOT update lastOrganizeParam_ here - we want it to stay at the actual knob position
+    // so that setOrganize() won't apply unless the user actually moves the organize knob
   }
 
   // Increment to next splice (pending mode - waits for end of gene)
@@ -411,6 +429,7 @@ private:
   int currentIndex_ = 0;
   int pendingIndex_ = -1;    // -1 = no pending change (from shift or organize)
   int organizeTarget_ = -1;  // Target splice from organize knob
+  float lastOrganizeParam_ = -1.0f;  // Last organize parameter value (to detect actual movement)
 };
 
 } // namespace ShortwavDSP

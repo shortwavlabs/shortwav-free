@@ -470,22 +470,16 @@ void test_splice_navigation_organize(TestContext &ctx)
   mgr.addMarker(500);
   // 2 splices: [0,500), [500,1000)
 
-  // Organize parameter 0.0 -> first splice
+  // Organize parameter 0.0 -> first splice (applies immediately)
   mgr.setOrganize(0.0f);
-  mgr.applyOrganizeIfNoManualPending();
-  mgr.onEndOfSplice();
   T_ASSERT(ctx, mgr.getCurrentIndex() == 0);
 
-  // Organize parameter 1.0 -> last splice
+  // Organize parameter 1.0 -> last splice (applies immediately)
   mgr.setOrganize(1.0f);
-  mgr.applyOrganizeIfNoManualPending();
-  mgr.onEndOfSplice();
   T_ASSERT(ctx, mgr.getCurrentIndex() == 1);
 
   // Organize parameter 0.5 -> middle (rounds)
   mgr.setOrganize(0.5f);
-  mgr.applyOrganizeIfNoManualPending();
-  mgr.onEndOfSplice();
   T_ASSERT(ctx, mgr.getCurrentIndex() == 0 || mgr.getCurrentIndex() == 1);
 }
 
@@ -523,17 +517,17 @@ void test_splice_organize_vs_shift_priority(TestContext &ctx)
   // Start at splice 0
   T_ASSERT(ctx, mgr.getCurrentIndex() == 0);
 
-  // Set organize to target splice 2
+  // Set organize to target splice 2 (applies immediately)
   mgr.setOrganize(1.0f);
+  T_ASSERT(ctx, mgr.getCurrentIndex() == 2);
 
-  // But shift immediate should override and go to splice 1
+  // Shift immediate should move to next (wraps to 0)
   mgr.shiftImmediate();
-  T_ASSERT(ctx, mgr.getCurrentIndex() == 1);
+  T_ASSERT(ctx, mgr.getCurrentIndex() == 0);
 
-  // Now organize should not apply because shift just set current
-  mgr.applyOrganizeIfNoManualPending();
-  mgr.onEndOfSplice();
-  T_ASSERT(ctx, mgr.getCurrentIndex() == 1); // Should stay at 1, not jump to 2
+  // Setting organize again should apply immediately
+  mgr.setOrganize(0.5f);  // Middle splice
+  T_ASSERT(ctx, mgr.getCurrentIndex() == 1);
 }
 
 void test_splice_extend_for_recording(TestContext &ctx)
