@@ -41,6 +41,7 @@ public:
     }
     currentIndex_ = 0;
     pendingIndex_ = -1;
+    organizeTarget_ = -1;
   }
 
   // Clear all splices
@@ -49,6 +50,7 @@ public:
     splices_.clear();
     currentIndex_ = 0;
     pendingIndex_ = -1;
+    organizeTarget_ = -1;
   }
 
   //--------------------------------------------------------------------------
@@ -229,12 +231,13 @@ public:
   // Navigation
   //--------------------------------------------------------------------------
 
-  // Set pending splice from Organize parameter (0-1)
+  // Set target splice from Organize parameter (0-1)
+  // Only updates pending if the organize target changed significantly
   void setOrganize(float param) noexcept
   {
     if (splices_.empty())
     {
-      pendingIndex_ = -1;
+      organizeTarget_ = -1;
       return;
     }
 
@@ -242,13 +245,17 @@ public:
     int index = static_cast<int>(param * (splices_.size() - 1) + 0.5f);
     index = std::min(index, static_cast<int>(splices_.size()) - 1);
 
-    if (index != currentIndex_)
+    // Store the organize target, but don't override pending from shift
+    organizeTarget_ = index;
+  }
+
+  // Apply organize target as pending (called at end of splice if no manual pending)
+  void applyOrganizeIfNoManualPending() noexcept
+  {
+    // Only apply organize if there's no manual pending (from shift)
+    if (pendingIndex_ < 0 && organizeTarget_ >= 0 && organizeTarget_ != currentIndex_)
     {
-      pendingIndex_ = index;
-    }
-    else
-    {
-      pendingIndex_ = -1;
+      pendingIndex_ = organizeTarget_;
     }
   }
 
@@ -261,6 +268,7 @@ public:
     int nextIndex = (currentIndex_ + 1) % static_cast<int>(splices_.size());
     currentIndex_ = nextIndex;
     pendingIndex_ = -1;  // Clear any pending
+    organizeTarget_ = currentIndex_;  // Sync organize target to prevent override
   }
 
   // Increment to next splice (pending mode - waits for end of gene)
@@ -280,6 +288,9 @@ public:
   // Returns true if splice changed
   bool onEndOfSplice() noexcept
   {
+    // First, check if organize wants to change splice (only if no manual pending)
+    applyOrganizeIfNoManualPending();
+    
     if (pendingIndex_ >= 0 && pendingIndex_ < static_cast<int>(splices_.size()))
     {
       currentIndex_ = pendingIndex_;
@@ -392,12 +403,14 @@ public:
 
     currentIndex_ = 0;
     pendingIndex_ = -1;
+    organizeTarget_ = -1;
   }
 
 private:
   std::vector<SpliceMarker> splices_;
   int currentIndex_ = 0;
-  int pendingIndex_ = -1; // -1 = no pending change
+  int pendingIndex_ = -1;    // -1 = no pending change (from shift or organize)
+  int organizeTarget_ = -1;  // Target splice from organize knob
 };
 
 } // namespace ShortwavDSP

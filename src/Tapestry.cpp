@@ -146,8 +146,9 @@ void Tapestry::processButtons(const ProcessArgs& args)
         }
         else
         {
+          // Clear and start fresh recording (replaces existing content)
           bool clockSync = inputs[CLK_INPUT].isConnected();
-          dsp.startRecordingSameSplice(clockSync);
+          dsp.clearAndStartRecording(clockSync);
         }
       }
     }
@@ -328,7 +329,8 @@ void Tapestry::processGateInputs(const ProcessArgs& args)
       }
       else
       {
-        dsp.startRecordingSameSplice(false);
+        // Clear and start fresh recording
+        dsp.clearAndStartRecording(false);
       }
     }
   }

@@ -199,6 +199,25 @@ public:
     return recordState_.mode;
   }
 
+  // Clear buffer and start fresh recording (replaces existing content)
+  void clearAndStartRecording(bool clockSync = false) noexcept
+  {
+    // Clear existing buffer and splices
+    buffer_.clear();
+    spliceManager_.clear();
+    
+    // Start fresh recording
+    if (clockSync)
+    {
+      pendingRecordMode_ = RecordState::Mode::SameSplice;
+      recordState_.waitingForClock = true;
+    }
+    else
+    {
+      startRecording(RecordState::Mode::SameSplice);
+    }
+  }
+
   void startRecordingSameSplice(bool clockSync = false) noexcept
   {
     if (clockSync)

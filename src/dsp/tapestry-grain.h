@@ -138,6 +138,9 @@ public:
     // Calculate slide offset within splice
     float slideOffset = slide_ * static_cast<float>(spliceLength - geneSamples);
 
+    // Update absolute position for splice marker creation
+    updateAbsolutePosition(spliceStart, slideOffset);
+
     // Get playback speed (can be negative for reverse)
     float speed = variSpeedState_.speedRatio * sampleRateRatio_;
     if (variSpeedState_.isStopped)
@@ -219,8 +222,8 @@ public:
   // Gene/Playhead Management
   //--------------------------------------------------------------------------
 
-  // Get current playhead position relative to splice start
-  double getPlayheadPosition() const noexcept
+  // Get current playhead position (relative to splice, for internal use)
+  double getPlayheadPositionRelative() const noexcept
   {
     // Return position of most recent voice
     for (int i = 0; i < kMaxVoices; i++)
@@ -232,6 +235,19 @@ public:
       }
     }
     return grainStartPosition_;
+  }
+
+  // Get current playhead position as absolute buffer frame
+  double getPlayheadPosition() const noexcept
+  {
+    return lastAbsolutePosition_;
+  }
+
+  // Update the last known absolute position (call from process when we know splice bounds)
+  void updateAbsolutePosition(size_t spliceStart, float slideOffset) noexcept
+  {
+    double relPos = getPlayheadPositionRelative();
+    lastAbsolutePosition_ = static_cast<double>(spliceStart) + slideOffset + relPos;
   }
 
   // Retrigger playback from start (Play input)
@@ -380,6 +396,7 @@ private:
 
   double grainStartPosition_ = 0.0;
   float grainPhase_ = 0.0f;
+  double lastAbsolutePosition_ = 0.0;  // Absolute buffer position for splice creation
 
   // Clock sync state
   float lastClockTime_ = 0.0f;
