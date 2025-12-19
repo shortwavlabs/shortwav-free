@@ -12,4 +12,4 @@ extern Model *modelFormantOsc;
 extern Model *modelThreeBandEQ;
 extern Model *modelLowPassFilter;
 extern Model *modelWavPlayer;
-extern Model *modelMorphagene;
+extern Model *modelTapestry;
