@@ -73,6 +73,17 @@
         "Granular",
         "Utility"
       ]
+    },
+    {
+      "slug": "Morphagene",
+      "name": "Morphagene",
+      "description": "Granular microsound processor inspired by musique concrète - manipulate audio reels with splices, grains, and morph controls",
+      "tags": [
+        "Sampler",
+        "Granular",
+        "Recording",
+        "Looper"
+      ]
     }
   ]
 }
