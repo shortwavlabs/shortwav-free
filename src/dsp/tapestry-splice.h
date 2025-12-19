@@ -252,7 +252,18 @@ public:
     }
   }
 
-  // Increment to next splice (Shift button)
+  // Increment to next splice immediately (Shift button - immediate mode)
+  void shiftImmediate() noexcept
+  {
+    if (splices_.empty())
+      return;
+
+    int nextIndex = (currentIndex_ + 1) % static_cast<int>(splices_.size());
+    currentIndex_ = nextIndex;
+    pendingIndex_ = -1;  // Clear any pending
+  }
+
+  // Increment to next splice (pending mode - waits for end of gene)
   void shift() noexcept
   {
     if (splices_.empty())

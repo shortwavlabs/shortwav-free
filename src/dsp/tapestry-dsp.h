@@ -169,7 +169,11 @@ public:
   {
     if (moduleMode_ == ModuleMode::Normal)
     {
-      spliceManager_.shift();
+      // Shift immediately to next splice
+      spliceManager_.shiftImmediate();
+      
+      // Retrigger the grain engine at new splice position
+      grainEngine_.retrigger(slideParam_);
     }
   }
 
