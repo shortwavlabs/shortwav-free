@@ -13,5 +13,4 @@ void init(Plugin *p) {
 	p->addModel(modelThreeBandEQ);
 	p->addModel(modelLowPassFilter);
 	p->addModel(modelWavPlayer);
-	p->addModel(modelTapestry);
 }
